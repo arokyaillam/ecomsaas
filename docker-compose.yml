@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:16
     container_name: ecomsaas_postgres
     restart: always
     environment:
@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: ecomsaas
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -19,7 +19,7 @@ services:
     container_name: ecomsaas_redis
     restart: always
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
 
