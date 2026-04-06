@@ -23,10 +23,13 @@ coverage
 
 # Build Outputs
 .next/
+.svelte-kit/
 out/
 build
-dist
+dist/
 
+# TypeScript
+*.tsbuildinfo
 
 # Debug
 npm-debug.log*

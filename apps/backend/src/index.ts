@@ -8,6 +8,8 @@ import swaggerUI from '@fastify/swagger-ui';
 import bcrypt from 'bcrypt';
 import { db, users, stores } from './db/index.js';
 import { eq } from 'drizzle-orm';
+import productRoutes from './routes/products.js';
+import categoryRoutes from './routes/categories.js';
 
 const fastify = Fastify({ 
   logger: true,
@@ -33,6 +35,7 @@ await fastify.register(cors, {
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://admin.ecomsaas.com'] 
     : ['http://localhost:5173', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true 
 });
 
@@ -229,6 +232,10 @@ fastify.post('/api/auth/login', {
     return reply.status(500).send({ error: 'Internal Server Error' });
   }
 });
+
+// Register routes
+await fastify.register(productRoutes, { prefix: '/api/products' });
+await fastify.register(categoryRoutes, { prefix: '/api/categories' });
 
 // Start the server
 try {

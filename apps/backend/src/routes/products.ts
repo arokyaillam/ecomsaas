@@ -1,0 +1,149 @@
+import { FastifyInstance } from 'fastify';
+import { db, products, categories, subcategories, modifierGroups } from '../db/index.js';
+import { eq, and } from 'drizzle-orm';
+
+export default async function productRoutes(fastify: FastifyInstance) {
+  // Pre-handler hook to authenticate requests using JWT
+  fastify.addHook('preHandler', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+      const user = request.user as { storeId?: string };
+      if (!user?.storeId) {
+        return reply.status(401).send({ error: 'Invalid token: missing storeId. Please log in again.' });
+      }
+    } catch (err) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+  });
+
+  // 1. GET ALL PRODUCTS
+  fastify.get('/', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string; userId: string; role: string };
+    
+    try {
+      const allProducts = await db.select().from(products).where(eq(products.storeId, storeId));
+      return reply.send({ data: allProducts });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // 2. GET PRODUCT BY ID
+  fastify.get<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const { id } = request.params;
+
+    try {
+      const productArr = await db.select()
+        .from(products)
+        .where(
+          and(
+            eq(products.id, id),
+            eq(products.storeId, storeId)
+          )
+        ).limit(1);
+
+      if (productArr.length === 0) {
+        return reply.status(404).send({ error: 'Product not found' });
+      }
+
+      return reply.send({ data: productArr[0] });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // 3. CREATE PRODUCT
+  fastify.post('/', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const productData = request.body as any;
+
+    // Clean up empty strings to null for postgres compatibility
+    for (const key of Object.keys(productData)) {
+      if (productData[key] === '') {
+        productData[key] = null;
+      }
+    }
+
+    try {
+      const newProduct = await db.insert(products).values({
+        ...productData,
+        storeId,
+      }).returning();
+
+      return reply.status(201).send({ message: 'Product created', data: newProduct[0] });
+    } catch (error: any) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: { general: error.message || String(error) } });
+    }
+  });
+
+  // 4. UPDATE PRODUCT
+  fastify.put<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const { id } = request.params;
+    const productData = request.body as any;
+
+    // Clean up empty strings to null for postgres compatibility
+    for (const key of Object.keys(productData)) {
+      if (productData[key] === '') {
+        productData[key] = null;
+      }
+    }
+
+    // Strip immutable system fields from the payload before applying to the database
+    const payloadToUpdate = { ...productData };
+    delete payloadToUpdate.id;
+    delete payloadToUpdate.storeId;
+    delete payloadToUpdate.createdAt;
+    delete payloadToUpdate.updatedAt;
+
+    try {
+      const updatedProduct = await db.update(products)
+        .set({ ...payloadToUpdate, updatedAt: new Date() })
+        .where(
+          and(
+            eq(products.id, id),
+            eq(products.storeId, storeId)
+          )
+        ).returning();
+
+      if (updatedProduct.length === 0) {
+        return reply.status(404).send({ error: 'Product not found' });
+      }
+
+      return reply.send({ message: 'Product updated', data: updatedProduct[0] });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // 5. DELETE PRODUCT
+  fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const { id } = request.params;
+
+    try {
+      // Ensure product exists and belongs to store
+      const deletion = await db.delete(products)
+        .where(
+          and(
+            eq(products.id, id),
+            eq(products.storeId, storeId)
+          )
+        ).returning({ id: products.id });
+
+      if (deletion.length === 0) {
+        return reply.status(404).send({ error: 'Product not found' });
+      }
+
+      return reply.send({ message: 'Product deleted' });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+}
