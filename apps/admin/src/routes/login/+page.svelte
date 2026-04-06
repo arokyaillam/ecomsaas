@@ -1,16 +1,18 @@
-<script>
+<script lang="ts">
+    import { API_BASE_URL } from '$lib/api';
+    
     let email = $state('');
     let password = $state('');
     let loading = $state(false);
     let errorMessage = $state('');
 
-    async function handleLogin(e) {
+    async function handleLogin(e: SubmitEvent) {
         e.preventDefault();
         loading = true;
         errorMessage = '';
 
         try {
-            const res = await fetch('http://localhost:8000/api/auth/login', {
+            const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -41,12 +43,12 @@
 
         <form onsubmit={handleLogin}>
             <div class="input-group">
-                <label>Email Address</label>
-                <input type="email" bind:value={email} required placeholder="admin@store.com" />
+                <label for="email">Email Address</label>
+                <input id="email" type="email" bind:value={email} required placeholder="admin@store.com" />
             </div>
             <div class="input-group">
-                <label>Password</label>
-                <input type="password" bind:value={password} required placeholder="••••••••" />
+                <label for="password">Password</label>
+                <input id="password" type="password" bind:value={password} required placeholder="••••••••" />
             </div>
             <button type="submit" class="primary-btn" disabled={loading}>
                 {loading ? 'Authenticating...' : 'Secure Login'}

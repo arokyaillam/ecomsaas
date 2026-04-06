@@ -1,4 +1,6 @@
-<script>
+<script lang="ts">
+    import { API_BASE_URL } from '$lib/api';
+    
     let storeName = $state('');
     let domain = $state('');
     let email = $state('');
@@ -7,14 +9,14 @@
     let errorMessage = $state('');
     let successMessage = $state('');
 
-    async function handleRegister(e) {
+    async function handleRegister(e: SubmitEvent) {
         e.preventDefault();
         loading = true;
         errorMessage = '';
         successMessage = '';
 
         try {
-            const res = await fetch('http://localhost:8000/api/auth/register', {
+            const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ storeName, domain, email, password })
@@ -47,20 +49,20 @@
 
         <form onsubmit={handleRegister}>
             <div class="input-group">
-                <label>Store Name</label>
-                <input type="text" bind:value={storeName} required placeholder="My Awesome Store" />
+                <label for="storeName">Store Name</label>
+                <input id="storeName" type="text" bind:value={storeName} required placeholder="My Awesome Store" />
             </div>
             <div class="input-group">
-                <label>Store Domain</label>
-                <input type="text" bind:value={domain} required placeholder="awesome-store" />
+                <label for="domain">Store Domain</label>
+                <input id="domain" type="text" bind:value={domain} required placeholder="awesome-store" />
             </div>
             <div class="input-group">
-                <label>Email Address</label>
-                <input type="email" bind:value={email} required placeholder="admin@store.com" />
+                <label for="email">Email Address</label>
+                <input id="email" type="email" bind:value={email} required placeholder="admin@store.com" />
             </div>
             <div class="input-group">
-                <label>Password</label>
-                <input type="password" bind:value={password} required placeholder="••••••••" minlength="6" />
+                <label for="password">Password</label>
+                <input id="password" type="password" bind:value={password} required placeholder="••••••••" minlength="6" />
             </div>
             <button type="submit" class="primary-btn" disabled={loading}>
                 {loading ? 'Creating...' : 'Register Store'}

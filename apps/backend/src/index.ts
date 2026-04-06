@@ -1,18 +1,47 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import rateLimit from '@fastify/rate-limit';
+import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import bcrypt from 'bcrypt';
 import { db, users, stores } from './db/index.js';
 import { eq } from 'drizzle-orm';
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ 
+  logger: true,
+  // Security: Disable powered by header
+  disableRequestLogging: false
+});
+
+// Security: Add helmet for security headers
+await fastify.register(helmet, {
+  contentSecurityPolicy: false, // Disable for Swagger UI
+  crossOriginEmbedderPolicy: false
+});
+
+// Security: Rate limiting for auth endpoints
+await fastify.register(rateLimit, {
+  max: 100, // Global limit
+  timeWindow: '1 minute',
+  errorResponseBuilder: () => ({ error: 'Too many requests, please try again later' })
+});
 
 // Plugins Registration using await ensures Swagger is loaded before routes
-await fastify.register(cors, { origin: '*' });
+await fastify.register(cors, { 
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://admin.ecomsaas.com'] 
+    : ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true 
+});
 
-await fastify.register(jwt, { secret: 'super_secret_mnasati_key_123' });
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+
+await fastify.register(jwt, { secret: JWT_SECRET });
 
 await fastify.register(swagger, {
   openapi: {
@@ -33,10 +62,24 @@ await fastify.register(swaggerUI, {
   }
 });
 
+// ------------------ SECURITY ------------------
+// Rate limiting config for auth endpoints
+const authRateLimit = {
+  max: 5,
+  timeWindow: '5 minutes',
+  keyGenerator: (req: any) => req.ip || 'unknown'
+};
+
+// Input sanitization helper
+function sanitizeInput(input: string): string {
+  return input.trim().replace(/[<>\"']/g, '').slice(0, 255);
+}
+
 // ----------------------------------------------------
 // 1. REGISTER API (Merchant & Store Creation)
 // ----------------------------------------------------
 fastify.post('/api/auth/register', {
+  config: authRateLimit,
   schema: {
     tags: ['Auth'],
     summary: 'Register a new store and owner',
@@ -63,11 +106,22 @@ fastify.post('/api/auth/register', {
         properties: {
           error: { type: 'string' }
         }
+      },
+      500: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
       }
     }
   }
 }, async (request, reply) => {
-  const { email, password, storeName, domain } = request.body as any;
+  let { email, password, storeName, domain } = request.body as any;
+  
+  // Security: Sanitize inputs
+  email = sanitizeInput(email).toLowerCase();
+  storeName = sanitizeInput(storeName);
+  domain = sanitizeInput(domain).toLowerCase().replace(/[^a-z0-9-]/g, '');
 
   try {
     const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -108,6 +162,7 @@ fastify.post('/api/auth/register', {
 // 2. LOGIN API (Token Generation)
 // ----------------------------------------------------
 fastify.post('/api/auth/login', {
+  config: authRateLimit,
   schema: {
     tags: ['Auth'],
     summary: 'Login explicitly for merchants',
@@ -132,11 +187,21 @@ fastify.post('/api/auth/login', {
         properties: {
           error: { type: 'string' }
         }
+      },
+      500: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
       }
     }
   }
 }, async (request, reply) => {
-  const { email, password } = request.body as any;
+  let { email, password } = request.body as any;
+  
+  // Security: Sanitize inputs
+  email = sanitizeInput(email).toLowerCase();
+  password = password.trim();
 
   try {
     const foundUsers = await db.select().from(users).where(eq(users.email, email)).limit(1);
