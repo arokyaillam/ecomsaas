@@ -1,9 +1,25 @@
-import { pgTable, text, timestamp, uuid, integer, decimal, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, integer, decimal, boolean, json } from "drizzle-orm/pg-core";
 
 export const stores = pgTable("stores", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   domain: text("domain").notNull().unique(),
+  // Theme Settings
+  primaryColor: text("primary_color").default("#0ea5e9"),
+  secondaryColor: text("secondary_color").default("#6366f1"),
+  accentColor: text("accent_color").default("#8b5cf6"),
+  backgroundColor: text("background_color").default("#0f172a"),
+  surfaceColor: text("surface_color").default("#1e293b"),
+  textColor: text("text_color").default("#f8fafc"),
+  textSecondaryColor: text("text_secondary_color").default("#94a3b8"),
+  borderColor: text("border_color").default("rgba(255,255,255,0.1)"),
+  borderRadius: text("border_radius").default("12px"),
+  fontFamily: text("font_family").default("Inter, sans-serif"),
+  logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+  // Store Settings
+  currency: text("currency").default("USD"),
+  language: text("language").default("en"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

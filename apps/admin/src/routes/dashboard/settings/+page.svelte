@@ -1,12 +1,126 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
+    import { API_BASE_URL } from '$lib/api';
 
     let storeId = $state('');
+    let loading = $state(true);
+    let saving = $state(false);
+    let successMessage = $state('');
+    let errorMessage = $state('');
     
-    onMount(() => {
-        storeId = localStorage.getItem('merchant_store_id') || '';
+    // Theme State
+    let theme = $state({
+        primaryColor: '#0ea5e9',
+        secondaryColor: '#6366f1',
+        accentColor: '#8b5cf6',
+        backgroundColor: '#0f172a',
+        surfaceColor: '#1e293b',
+        textColor: '#f8fafc',
+        textSecondaryColor: '#94a3b8',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderRadius: '12px',
+        fontFamily: 'Inter, sans-serif',
+        logoUrl: '',
+        faviconUrl: '',
+        currency: 'USD',
+        language: 'en'
     });
+
+    // Preset themes
+    const presets = [
+        { name: 'Default Dark', colors: { primary: '#0ea5e9', secondary: '#6366f1', accent: '#8b5cf6', background: '#0f172a', surface: '#1e293b', text: '#f8fafc', textSecondary: '#94a3b8', border: 'rgba(255,255,255,0.1)' }},
+        { name: 'Ocean', colors: { primary: '#06b6d4', secondary: '#3b82f6', accent: '#8b5cf6', background: '#0c4a6e', surface: '#164e63', text: '#ecfeff', textSecondary: '#a5f3fc', border: 'rgba(255,255,255,0.1)' }},
+        { name: 'Forest', colors: { primary: '#22c55e', secondary: '#16a34a', accent: '#84cc16', background: '#064e3b', surface: '#065f46', text: '#f0fdf4', textSecondary: '#bbf7d0', border: 'rgba(255,255,255,0.1)' }},
+        { name: 'Sunset', colors: { primary: '#f97316', secondary: '#ea580c', accent: '#fbbf24', background: '#431407', surface: '#7c2d12', text: '#fff7ed', textSecondary: '#fed7aa', border: 'rgba(255,255,255,0.1)' }},
+        { name: 'Rose', colors: { primary: '#e11d48', secondary: '#db2777', accent: '#f472b6', background: '#4c0519', surface: '#831843', text: '#fff1f2', textSecondary: '#fecdd3', border: 'rgba(255,255,255,0.1)' }},
+    ];
+
+    onMount(async () => {
+        storeId = localStorage.getItem('merchant_store_id') || '';
+        const token = localStorage.getItem('merchant_token');
+        
+        if (!token) {
+            goto('/login');
+            return;
+        }
+
+        // Fetch current theme
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/store/by-domain/${window.location.hostname}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                if (data.data?.theme) {
+                    const t = data.data.theme;
+                    theme = {
+                        primaryColor: t.primaryColor || theme.primaryColor,
+                        secondaryColor: t.secondaryColor || theme.secondaryColor,
+                        accentColor: t.accentColor || theme.accentColor,
+                        backgroundColor: t.backgroundColor || theme.backgroundColor,
+                        surfaceColor: t.surfaceColor || theme.surfaceColor,
+                        textColor: t.textColor || theme.textColor,
+                        textSecondaryColor: t.textSecondaryColor || theme.textSecondaryColor,
+                        borderColor: t.borderColor || theme.borderColor,
+                        borderRadius: t.borderRadius || theme.borderRadius,
+                        fontFamily: t.fontFamily || theme.fontFamily,
+                        logoUrl: t.logoUrl || '',
+                        faviconUrl: t.faviconUrl || '',
+                        currency: data.data.currency || 'USD',
+                        language: data.data.language || 'en'
+                    };
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch theme:', error);
+        } finally {
+            loading = false;
+        }
+    });
+
+    function applyPreset(preset: any) {
+        theme = { ...theme, 
+            primaryColor: preset.colors.primary,
+            secondaryColor: preset.colors.secondary,
+            accentColor: preset.colors.accent,
+            backgroundColor: preset.colors.background,
+            surfaceColor: preset.colors.surface,
+            textColor: preset.colors.text,
+            textSecondaryColor: preset.colors.textSecondary,
+            borderColor: preset.colors.border
+        };
+    }
+
+    async function saveTheme() {
+        saving = true;
+        successMessage = '';
+        errorMessage = '';
+        
+        const token = localStorage.getItem('merchant_token');
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/store/theme`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(theme)
+            });
+            
+            if (res.ok) {
+                successMessage = 'Theme updated successfully! Changes will reflect in storefront immediately.';
+            } else {
+                errorMessage = 'Failed to update theme';
+            }
+        } catch (error) {
+            errorMessage = 'Network error. Please try again.';
+        } finally {
+            saving = false;
+        }
+    }
 
     function copyToClipboard(text: string) {
         navigator.clipboard.writeText(text);
@@ -16,57 +130,343 @@
 <div class="fade-in">
     <div class="dashboard-header">
         <div>
-            <h2>Settings</h2>
-            <p style="color: var(--text-secondary); margin-top: 4px;">Manage your store settings</p>
+            <h2>Store Settings</h2>
+            <p style="color: var(--text-secondary); margin-top: 4px;">Customize your store theme and appearance</p>
         </div>
-        
         <div class="header-actions">
             <button class="action-btn secondary" onclick={() => goto('/dashboard')}>Back</button>
         </div>
     </div>
 
-    <div class="content-grid" style="grid-template-columns: 1fr 1fr;">
-        <div class="glass-card dashboard">
-            <h3 style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">Store Information</h3>
-            
-            <div class="input-group">
-                <span style="font-size: 0.9rem; font-weight: 500; margin-bottom: 8px; display: block;">Store ID</span>
-                <code style="display: flex; align-items: center; justify-content: space-between; background: var(--input-bg); padding: 14px 16px; border-radius: 12px; font-size: 0.85rem; color: var(--accent-color);">
-                    <span>{storeId}</span>
-                    <button aria-label="Copy Store ID" onclick={() => copyToClipboard(storeId)} style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                    </button>
-                </code>
-            </div>
-            
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 16px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px;">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    {#if successMessage}
+        <div class="glass-card dashboard" style="margin-bottom: 24px; background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3);">
+            <p style="color: #22c55e; display: flex; align-items: center; gap: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <check d="M20 6L9 17l-5-5"/>
                 </svg>
-                Store ID is used for API integrations
+                {successMessage}
             </p>
         </div>
-        
+    {/if}
+
+    {#if errorMessage}
+        <div class="glass-card dashboard" style="margin-bottom: 24px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+            <p style="color: #ef4444;">{errorMessage}</p>
+        </div>
+    {/if}
+
+    <div class="content-grid" style="grid-template-columns: 1fr 400px;">
+        <!-- Theme Editor -->
         <div class="glass-card dashboard">
-            <h3 style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">Account</h3>
-            
-            <button class="action-btn" style="width: 100%; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; justify-content: center; display: flex; gap: 8px;" onclick={() => {
-                localStorage.removeItem('merchant_token');
-                localStorage.removeItem('merchant_store_id');
-                goto('/login');
-            }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                    <polyline points="16 17 21 12 16 7"></polyline>
-                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                </svg>
-                Logout
-            </button>
+            <h3 style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+                Theme Customization
+            </h3>
+
+            {#if loading}
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    {#each Array(6) as _}
+                        <div class="skeleton" style="height: 60px;"></div>
+                    {/each}
+                </div>
+            {:else}
+                <!-- Presets -->
+                <div style="margin-bottom: 32px;">
+                    <label style="display: block; margin-bottom: 12px; font-weight: 500;">Quick Presets</label>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        {#each presets as preset}
+                            <button
+                                type="button"
+                                class="action-btn"
+                                style="padding: 8px 16px; font-size: 0.9rem;"
+                                onclick={() => applyPreset(preset)}
+                            >
+                                {preset.name}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+
+                <!-- Color Settings -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px;">
+                    <div class="input-group">
+                        <label for="primaryColor">Primary Color</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                type="color"
+                                id="primaryColor"
+                                bind:value={theme.primaryColor}
+                                style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;"
+                            />
+                            <input
+                                type="text"
+                                bind:value={theme.primaryColor}
+                                style="flex: 1;"
+                                placeholder="#0ea5e9"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="secondaryColor">Secondary Color</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                type="color"
+                                id="secondaryColor"
+                                bind:value={theme.secondaryColor}
+                                style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;"
+                            />
+                            <input
+                                type="text"
+                                bind:value={theme.secondaryColor}
+                                style="flex: 1;"
+                                placeholder="#6366f1"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="accentColor">Accent Color</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                type="color"
+                                id="accentColor"
+                                bind:value={theme.accentColor}
+                                style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;"
+                            />
+                            <input
+                                type="text"
+                                bind:value={theme.accentColor}
+                                style="flex: 1;"
+                                placeholder="#8b5cf6"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="backgroundColor">Background Color</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                type="color"
+                                id="backgroundColor"
+                                bind:value={theme.backgroundColor}
+                                style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;"
+                            />
+                            <input
+                                type="text"
+                                bind:value={theme.backgroundColor}
+                                style="flex: 1;"
+                                placeholder="#0f172a"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="surfaceColor">Surface Color</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                type="color"
+                                id="surfaceColor"
+                                bind:value={theme.surfaceColor}
+                                style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;"
+                            />
+                            <input
+                                type="text"
+                                bind:value={theme.surfaceColor}
+                                style="flex: 1;"
+                                placeholder="#1e293b"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="textColor">Text Color</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                type="color"
+                                id="textColor"
+                                bind:value={theme.textColor}
+                                style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;"
+                            />
+                            <input
+                                type="text"
+                                bind:value={theme.textColor}
+                                style="flex: 1;"
+                                placeholder="#f8fafc"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Border Radius -->
+                <div style="margin-bottom: 24px;">
+                    <label for="borderRadius" style="display: block; margin-bottom: 12px; font-weight: 500;">Border Radius</label>
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <input
+                            type="range"
+                            id="borderRadius"
+                            min="0"
+                            max="32"
+                            value={parseInt(theme.borderRadius)}
+                            oninput={(e) => theme.borderRadius = `${e.currentTarget.value}px`}
+                            style="flex: 1;"
+                        />
+                        <span style="width: 60px; text-align: right;">{theme.borderRadius}</span>
+                    </div>
+                </div>
+
+                <!-- Store Info -->
+                <div style="border-top: 1px solid var(--glass-border); padding-top: 24px; margin-bottom: 24px;">
+                    <div class="input-group">
+                        <label for="currency">Currency</label>
+                        <select id="currency" bind:value={theme.currency}>
+                            <option value="USD">USD ($)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="GBP">GBP (£)</option>
+                            <option value="KWD">KWD (د.ك)</option>
+                            <option value="AED">AED (د.إ)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button class="action-btn primary" onclick={saveTheme} disabled={saving} style="flex: 1;">
+                        {saving ? 'Saving...' : 'Save Theme'}
+                    </button>
+                    <button class="action-btn secondary" onclick={() => goto('/dashboard')} style="flex: 1;">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div>
+            <div class="glass-card dashboard" style="position: sticky; top: 20px;">
+                <h3 style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+                    Live Preview
+                </h3>
+
+                <div
+                    style="
+                        border-radius: 12px;
+                        padding: 24px;
+                        background: {theme.backgroundColor};
+                        color: {theme.textColor};
+                        border: 1px solid {theme.borderColor};
+                        font-family: {theme.fontFamily};
+                    "
+                >
+                    <div
+                        style="
+                            padding: 16px;
+                            border-radius: {theme.borderRadius};
+                            background: {theme.surfaceColor};
+                            margin-bottom: 16px;
+                        "
+                    >
+                        <h4 style="margin: 0 0 8px 0; color: {theme.textColor};">Sample Product</h4>
+                        <p style="margin: 0; color: {theme.textSecondaryColor}; font-size: 0.9rem;">
+                            This is how your content will look
+                        </p>
+                    </div>
+
+                    <div style="display: flex; gap: 12px;">
+                        <button
+                            style="
+                                flex: 1;
+                                padding: 12px 20px;
+                                border-radius: {theme.borderRadius};
+                                background: linear-gradient(135deg, {theme.primaryColor}, {theme.secondaryColor});
+                                color: white;
+                                border: none;
+                                cursor: pointer;
+                                font-weight: 500;
+                            "
+                        >
+                            Primary
+                        </button>
+                        <button
+                            style="
+                                flex: 1;
+                                padding: 12px 20px;
+                                border-radius: {theme.borderRadius};
+                                background: {theme.surfaceColor};
+                                color: {theme.textColor};
+                                border: 1px solid {theme.borderColor};
+                                cursor: pointer;
+                            "
+                        >
+                            Secondary
+                        </button>
+                    </div>
+
+                    <div style="margin-top: 16px; text-align: center;">
+                        <span style="color: {theme.accentColor};">
+                            Accent Color Example
+                        </span>
+                    </div>
+                </div>
+
+                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--glass-border);">
+                    <label style="display: block; margin-bottom: 12px; font-weight: 500;">Store ID</label>
+                    <code
+                        style="
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            background: var(--input-bg);
+                            padding: 14px 16px;
+                            border-radius: 12px;
+                            font-size: 0.85rem;
+                            color: var(--accent-color);
+                        "
+                    >
+                        <span>{storeId}</span>
+                        <button
+                            aria-label="Copy Store ID"
+                            onclick={() => copyToClipboard(storeId)}
+                            style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer;"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        </button>
+                    </code>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+    input[type="color"] {
+        -webkit-appearance: none;
+        border: none;
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+        padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+        border: none;
+    }
+    input[type="range"] {
+        -webkit-appearance: none;
+        height: 8px;
+        border-radius: 4px;
+        background: var(--surface-bg);
+        outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--accent-color);
+        cursor: pointer;
+    }
+</style>

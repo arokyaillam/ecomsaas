@@ -10,6 +10,7 @@ import { db, users, stores } from './db/index.js';
 import { eq } from 'drizzle-orm';
 import productRoutes from './routes/products.js';
 import categoryRoutes from './routes/categories.js';
+import storeRoutes from './routes/store.js';
 
 const fastify = Fastify({ 
   logger: true,
@@ -233,9 +234,92 @@ fastify.post('/api/auth/login', {
   }
 });
 
+  return reply.send({ token, storeId: user.storeId });
+
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: 'Internal Server Error' });
+  }
+});
+
+// ----------------------------------------------------
+// 3. UPDATE STORE THEME API (Protected)
+// ----------------------------------------------------
+fastify.put('/api/store/theme', {
+  preHandler: async (request, reply) => {
+    try {
+      await request.jwtVerify();
+      const user = request.user as { storeId?: string };
+      if (!user?.storeId) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+    } catch {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+  },
+  schema: {
+    tags: ['Store'],
+    summary: 'Update store theme settings',
+    body: {
+      type: 'object',
+      properties: {
+        primaryColor: { type: 'string' },
+        secondaryColor: { type: 'string' },
+        accentColor: { type: 'string' },
+        backgroundColor: { type: 'string' },
+        surfaceColor: { type: 'string' },
+        textColor: { type: 'string' },
+        textSecondaryColor: { type: 'string' },
+        borderColor: { type: 'string' },
+        borderRadius: { type: 'string' },
+        fontFamily: { type: 'string' },
+        logoUrl: { type: 'string' },
+        faviconUrl: { type: 'string' },
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          message: { type: 'string' },
+          data: { type: 'object' }
+        }
+      },
+      500: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
+      }
+    }
+  }
+}, async (request, reply) => {
+  const { storeId } = request.user as { storeId: string };
+  const themeData = request.body as any;
+  
+  try {
+    const updatedStore = await db.update(stores)
+      .set({
+        ...themeData,
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+    
+    return reply.send({ 
+      message: 'Theme updated successfully',
+      data: updatedStore[0]
+    });
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: 'Internal Server Error' });
+  }
+});
+
 // Register routes
 await fastify.register(productRoutes, { prefix: '/api/products' });
 await fastify.register(categoryRoutes, { prefix: '/api/categories' });
+await fastify.register(storeRoutes, { prefix: '/api/store' });
 
 // Start the server
 try {
