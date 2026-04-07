@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { getStoreByDomain, getStoreProducts, getStoreCategories } from '@/lib/store';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Header } from '@/components/Header';
 
 export default async function Home() {
   let store = null;
@@ -57,59 +58,7 @@ export default async function Home() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: theme.backgroundColor }}>
       {/* Header */}
-      <header style={{ 
-        position: 'sticky', 
-        top: 0, 
-        zIndex: 50, 
-        borderBottom: `1px solid ${theme.borderColor}`, 
-        backgroundColor: theme.surfaceColor,
-        backdropFilter: 'blur(10px)'
-      }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              {theme.logoUrl ? (
-                <Image 
-                  src={theme.logoUrl} 
-                  alt={store.name}
-                  width={40}
-                  height={40}
-                  className="rounded-lg"
-                />
-              ) : (
-                <div 
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                  style={{ 
-                    background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})` 
-                  }}
-                >
-                  {store.name.charAt(0)}
-                </div>
-              )}
-              <h1 className="text-xl font-bold" style={{ color: theme.textColor }}>
-                {store.name}
-              </h1>
-            </div>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/" style={{ color: theme.textSecondaryColor }} className="hover:opacity-80 transition-opacity">
-                Home
-              </Link>
-              <Link href="/products" style={{ color: theme.textSecondaryColor }} className="hover:opacity-80 transition-opacity">
-                Products
-              </Link>
-              <Link href="/categories" style={{ color: theme.textSecondaryColor }} className="hover:opacity-80 transition-opacity">
-                Categories
-              </Link>
-            </nav>
-            <button 
-              className="px-6 py-2 rounded-lg text-white font-medium"
-              style={{ backgroundColor: theme.primaryColor }}
-            >
-              Shop Now
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header store={store} categories={categories} />
 
       {/* Hero Section */}
       <section className="py-20 px-4" style={{ backgroundColor: theme.backgroundColor }}>

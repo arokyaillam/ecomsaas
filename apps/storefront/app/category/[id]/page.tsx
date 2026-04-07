@@ -1,21 +1,26 @@
 import { headers } from 'next/headers';
-import { getStoreByDomain, getStoreProducts, getStoreCategories } from '@/lib/store';
+import { getStoreByDomain, getStoreProducts, getStoreCategories, getStoreSubcategories } from '@/lib/store';
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
+import { Header } from '@/components/Header';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ [key: string]: string | undefined }>;
 }
 
-export default async function CategoryPage({ params }: PageProps) {
+export default async function CategoryPage({ params, searchParams }: PageProps) {
   const resolvedParams = await params;
   const categoryId = resolvedParams.id;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const currentSubcategoryId = resolvedSearchParams.subcategoryId || null;
   
   let store = null;
   let products: any[] = [];
   let category: any = null;
   let categories: any[] = [];
+  let subcategories: any[] = [];
   let error = null;
   let domain = 'localhost';
 
@@ -26,13 +31,15 @@ export default async function CategoryPage({ params }: PageProps) {
     store = await getStoreByDomain(domain);
 
     if (store) {
-      const [allProducts, allCategories] = await Promise.all([
+      const [allProducts, allCategories, allSubcategories] = await Promise.all([
         getStoreProducts(store.id),
         getStoreCategories(store.id),
+        getStoreSubcategories(store.id, categoryId),
       ]);
       
       categories = allCategories;
       category = allCategories.find((c: any) => c.id === categoryId);
+      subcategories = allSubcategories;
       
       if (!category) {
         return notFound();
@@ -40,6 +47,11 @@ export default async function CategoryPage({ params }: PageProps) {
 
       // Filter products by categoryId
       products = allProducts.filter((p: any) => p.categoryId === categoryId);
+      
+      // Filter by subcategoryId if present
+      if (currentSubcategoryId) {
+        products = products.filter((p: any) => p.subcategoryId === currentSubcategoryId);
+      }
     }
   } catch (err) {
     console.error('Error loading category:', err);
@@ -63,59 +75,7 @@ export default async function CategoryPage({ params }: PageProps) {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: theme.backgroundColor }}>
       {/* Header */}
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        borderBottom: `1px solid ${theme.borderColor}`,
-        backgroundColor: theme.surfaceColor,
-        backdropFilter: 'blur(10px)'
-      }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              {theme.logoUrl ? (
-                <Image
-                  src={theme.logoUrl}
-                  alt={store.name}
-                  width={40}
-                  height={40}
-                  className="rounded-lg"
-                />
-              ) : (
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                  style={{
-                    background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})`
-                  }}
-                >
-                  {store.name.charAt(0)}
-                </div>
-              )}
-              <Link href="/" className="text-xl font-bold" style={{ color: theme.textColor }}>
-                {store.name}
-              </Link>
-            </div>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/" style={{ color: theme.textSecondaryColor }} className="hover:opacity-80 transition-opacity">
-                Home
-              </Link>
-              <Link href="/products" style={{ color: theme.textSecondaryColor }} className="hover:opacity-80 transition-opacity">
-                Products
-              </Link>
-              <Link href="/categories" style={{ color: theme.textSecondaryColor }} className="hover:opacity-80 transition-opacity">
-                Categories
-              </Link>
-            </nav>
-            <button
-              className="px-6 py-2 rounded-lg text-white font-medium"
-              style={{ backgroundColor: theme.primaryColor }}
-            >
-              Cart
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header store={store} categories={categories} />
 
       {/* Page Header */}
       <section className="py-12 px-4" style={{ backgroundColor: theme.backgroundColor }}>
@@ -173,6 +133,49 @@ export default async function CategoryPage({ params }: PageProps) {
                   }}
                 >
                   {cat.nameEn}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Subcategory Filter Bar */}
+      {subcategories.length > 0 && (
+        <section className="px-4 pb-8" style={{ backgroundColor: theme.backgroundColor }}>
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/category/${categoryId}`}
+                className="px-4 py-2 rounded-full text-sm font-medium transition-colors hover:opacity-80"
+                style={!currentSubcategoryId ? {
+                  backgroundColor: theme.primaryColor,
+                  color: 'white',
+                  border: 'none',
+                } : {
+                  backgroundColor: theme.surfaceColor,
+                  border: `1px solid ${theme.borderColor}`,
+                  color: theme.textSecondaryColor,
+                }}
+              >
+                All
+              </Link>
+              {subcategories.map((sub: any) => (
+                <Link
+                  key={sub.id}
+                  href={`/category/${categoryId}?subcategoryId=${sub.id}`}
+                  className="px-4 py-2 rounded-full text-sm font-medium transition-colors hover:opacity-80"
+                  style={currentSubcategoryId === sub.id ? {
+                    backgroundColor: theme.primaryColor,
+                    color: 'white',
+                    border: 'none',
+                  } : {
+                    backgroundColor: theme.surfaceColor,
+                    border: `1px solid ${theme.borderColor}`,
+                    color: theme.textSecondaryColor,
+                  }}
+                >
+                  {sub.nameEn}
                 </Link>
               ))}
             </div>

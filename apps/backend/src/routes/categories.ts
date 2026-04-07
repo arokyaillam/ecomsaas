@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { db, categories } from '../db/index.js';
+import { db, categories, subcategories } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 
 // Extend FastifyRequest for JWT user
@@ -135,6 +135,81 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ message: 'Category deleted' });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // ----------------------------------------------------
+  // SUBCATEGORY ROUTES (Nested under Categories)
+  // ----------------------------------------------------
+
+  // 6. GET ALL SUBCATEGORIES FOR A CATEGORY
+  fastify.get<{ Params: { id: string } }>('/:id/subcategories', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const { id } = request.params;
+
+    try {
+      const allSubcategories = await db.select()
+        .from(subcategories)
+        .where(
+          and(
+            eq(subcategories.categoryId, id),
+            eq(subcategories.storeId, storeId)
+          )
+        );
+      return reply.send({ data: allSubcategories });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // 7. CREATE A SUBCATEGORY
+  fastify.post<{ Params: { id: string } }>('/:id/subcategories', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const { id } = request.params;
+    const subcatData = request.body as any;
+
+    try {
+      if (!subcatData.nameEn) {
+        return reply.status(400).send({ error: 'nameEn is required' });
+      }
+
+      const newSubcategory = await db.insert(subcategories).values({
+        nameEn: subcatData.nameEn,
+        nameAr: subcatData.nameAr || null,
+        categoryId: id,
+        storeId: storeId,
+      }).returning();
+
+      return reply.status(201).send({ message: 'Subcategory created', data: newSubcategory[0] });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // 8. DELETE A SUBCATEGORY
+  fastify.delete<{ Params: { id: string, subId: string } }>('/:id/subcategories/:subId', async (request, reply) => {
+    const { storeId } = request.user as { storeId: string };
+    const { subId } = request.params;
+
+    try {
+      const deletion = await db.delete(subcategories)
+        .where(
+          and(
+            eq(subcategories.id, subId),
+            eq(subcategories.storeId, storeId)
+          )
+        ).returning({ id: subcategories.id });
+
+      if (deletion.length === 0) {
+        return reply.status(404).send({ error: 'Subcategory not found' });
+      }
+
+      return reply.send({ message: 'Subcategory deleted' });
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

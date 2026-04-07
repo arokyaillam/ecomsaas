@@ -120,6 +120,30 @@ export async function getStoreCategories(storeId: string) {
   }
 }
 
+export async function getStoreSubcategories(storeId: string, categoryId: string) {
+  console.log(`Fetching subcategories for store: ${storeId}, category: ${categoryId}`);
+  
+  try {
+    const res = await fetch(`${API_URL}/api/store/${storeId}/categories/${categoryId}/subcategories`, {
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!res.ok) {
+      console.error('Subcategories fetch failed:', res.status);
+      return [];
+    }
+    
+    const data = await res.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Failed to fetch subcategories:', error);
+    return [];
+  }
+}
+
 // Generate CSS variables from theme
 export function generateThemeCSS(theme: StoreTheme): string {
   return `

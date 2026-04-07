@@ -4,6 +4,7 @@
     import { goto } from '$app/navigation';
 
     let categories = $state([] as any[]);
+    let subcategories = $state([] as any[]);
     let loading = $state(true);
     let saving = $state(false);
     
@@ -54,6 +55,31 @@
             loading = false;
         }
     });
+
+    $effect(() => {
+        if (product.categoryId) {
+            fetchSubcategories(product.categoryId);
+        } else {
+            subcategories = [];
+            product.subcategoryId = '';
+        }
+    });
+
+    async function fetchSubcategories(catId: string) {
+        const token = localStorage.getItem('merchant_token');
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/categories/${catId}/subcategories`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                subcategories = data.data || [];
+            }
+        } catch (err) {
+            console.error('Failed to fetch subcategories:', err);
+        }
+    }
 
     async function handleSubmit(e: SubmitEvent) {
         e.preventDefault();
@@ -177,6 +203,9 @@
                         <label for="subcategoryId">Sub-category</label>
                         <select id="subcategoryId" bind:value={product.subcategoryId}>
                             <option value="">Select a subcategory</option>
+                            {#each subcategories as sub}
+                                <option value={sub.id}>{sub.nameEn}</option>
+                            {/each}
                         </select>
                     </div>
 

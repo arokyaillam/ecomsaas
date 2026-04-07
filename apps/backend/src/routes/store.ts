@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { db, stores, products, categories } from '../db/index.js';
+import { db, stores, products, categories, subcategories } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 
 // Public route - no auth required
@@ -108,6 +108,30 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     }
   });
   
+  // GET Store Subcategories (Public)
+  fastify.get('/:storeId/categories/:categoryId/subcategories', async (request, reply) => {
+    const { storeId, categoryId } = request.params as { storeId: string, categoryId: string };
+    
+    fastify.log.info(`Fetching subcategories for store: ${storeId}, category: ${categoryId}`);
+    
+    try {
+      const subcategoriesArr = await db.select()
+        .from(subcategories)
+        .where(
+          and(
+            eq(subcategories.storeId, storeId),
+            eq(subcategories.categoryId, categoryId)
+          )
+        );
+      
+      fastify.log.info(`Found ${subcategoriesArr.length} subcategories`);
+      
+      return reply.send({ data: subcategoriesArr });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
   // GET Store by ID
   fastify.get('/:storeId', async (request, reply) => {
     const { storeId } = request.params as { storeId: string };
