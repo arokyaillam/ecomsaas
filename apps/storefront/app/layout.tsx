@@ -57,7 +57,7 @@ export default async function RootLayout({
   const theme = store?.theme || defaultTheme;
   
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
         <style>{`
           :root {
@@ -80,7 +80,7 @@ export default async function RootLayout({
           }
         `}</style>
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider theme={theme}>
           {children}
         </ThemeProvider>

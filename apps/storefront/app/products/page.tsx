@@ -206,12 +206,22 @@ export default async function ProductsPage() {
                         </span>
                       )}
                     </div>
-                    <button
-                      className="w-full mt-4 py-2 text-sm text-white rounded-lg transition-opacity hover:opacity-90"
-                      style={{ backgroundColor: theme.primaryColor }}
-                    >
-                      Add to Cart
-                    </button>
+                    {product.currentQuantity <= 0 ? (
+                      <button 
+                        disabled
+                        className="w-full mt-4 py-2 text-sm text-white rounded-lg opacity-50 cursor-not-allowed transition-opacity"
+                        style={{ backgroundColor: theme.textSecondaryColor }}
+                      >
+                        Out of Stock
+                      </button>
+                    ) : (
+                      <button
+                        className="w-full mt-4 py-2 text-sm text-white rounded-lg transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: theme.primaryColor }}
+                      >
+                        Add to Cart
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
