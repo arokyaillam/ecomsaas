@@ -2,6 +2,17 @@ import { FastifyInstance } from 'fastify';
 import { db, products, categories, subcategories, modifierGroups } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 
+// Extend FastifyRequest for JWT user
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: {
+      userId: string;
+      storeId: string;
+      role: string;
+    };
+  }
+}
+
 export default async function productRoutes(fastify: FastifyInstance) {
   // Pre-handler hook to authenticate requests using JWT
   fastify.addHook('preHandler', async (request, reply) => {

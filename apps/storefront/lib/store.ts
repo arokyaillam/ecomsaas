@@ -26,16 +26,37 @@ export interface Store {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function getStoreByDomain(domain: string): Promise<Store | null> {
+  console.log('Fetching store for domain:', domain);
+  console.log('API URL:', API_URL);
+  
   try {
-    const res = await fetch(`${API_URL}/api/store/by-domain/${domain}`, {
-      next: { revalidate: 60 } // Cache for 1 minute
+    const url = `${API_URL}/api/store/by-domain/${domain}`;
+    console.log('Fetching from URL:', url);
+    
+    const res = await fetch(url, {
+      cache: 'no-store', // Disable caching for debugging
+      headers: {
+        'Content-Type': 'application/json',
+      }
     });
     
+    console.log('Response status:', res.status);
+    
     if (!res.ok) {
+      console.error('Store fetch failed:', res.status, res.statusText);
+      const errorText = await res.text();
+      console.error('Error body:', errorText);
       return null;
     }
     
     const data = await res.json();
+    console.log('Store data received:', data ? 'yes' : 'no');
+    
+    if (!data.data) {
+      console.error('No data in response');
+      return null;
+    }
+    
     return data.data;
   } catch (error) {
     console.error('Failed to fetch store:', error);
@@ -44,29 +65,57 @@ export async function getStoreByDomain(domain: string): Promise<Store | null> {
 }
 
 export async function getStoreProducts(storeId: string) {
+  console.log('Fetching products for store:', storeId);
+  
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/products`, {
-      next: { revalidate: 60 }
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      }
     });
     
-    if (!res.ok) return [];
+    console.log('Products response status:', res.status);
+    
+    if (!res.ok) {
+      console.error('Products fetch failed:', res.status);
+      return [];
+    }
+    
     const data = await res.json();
-    return data.data || [];
-  } catch {
+    const products = data.data || [];
+    console.log('Products received:', products.length);
+    return products;
+  } catch (error) {
+    console.error('Failed to fetch products:', error);
     return [];
   }
 }
 
 export async function getStoreCategories(storeId: string) {
+  console.log('Fetching categories for store:', storeId);
+  
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/categories`, {
-      next: { revalidate: 60 }
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      }
     });
     
-    if (!res.ok) return [];
+    console.log('Categories response status:', res.status);
+    
+    if (!res.ok) {
+      console.error('Categories fetch failed:', res.status);
+      return [];
+    }
+    
     const data = await res.json();
-    return data.data || [];
-  } catch {
+    const categories = data.data || [];
+    console.log('Categories received:', categories.length);
+    return categories;
+  } catch (error) {
+    console.error('Failed to fetch categories:', error);
     return [];
   }
 }

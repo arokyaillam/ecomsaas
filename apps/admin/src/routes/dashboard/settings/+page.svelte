@@ -47,7 +47,7 @@
 
         // Fetch current theme
         try {
-            const res = await fetch(`${API_BASE_URL}/api/store/by-domain/${window.location.hostname}`, {
+            const res = await fetch(`${API_BASE_URL}/api/store/${storeId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -171,7 +171,7 @@
             {:else}
                 <!-- Presets -->
                 <div style="margin-bottom: 32px;">
-                    <label style="display: block; margin-bottom: 12px; font-weight: 500;">Quick Presets</label>
+                    <span style="display: block; margin-bottom: 12px; font-weight: 500;">Quick Presets</span>
                     <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                         {#each presets as preset}
                             <button
@@ -336,7 +336,7 @@
                         Cancel
                     </button>
                 </div>
-            </div>
+            {/if}
         </div>
 
         <!-- Live Preview -->
@@ -408,7 +408,7 @@
                 </div>
 
                 <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--glass-border);">
-                    <label style="display: block; margin-bottom: 12px; font-weight: 500;">Store ID</label>
+                    <span style="display: block; margin-bottom: 12px; font-weight: 500;">Store ID</span>
                     <code
                         style="
                             display: flex;

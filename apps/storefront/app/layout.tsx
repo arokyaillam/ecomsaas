@@ -5,15 +5,22 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const headersList = await headers();
-  const domain = headersList.get('x-store-domain') || 'localhost';
-  const store = await getStoreByDomain(domain);
-  
-  return {
-    title: store?.name || "EcomSaaS Storefront",
-    description: "Modern e-commerce storefront",
-    icons: store?.theme.faviconUrl ? { icon: store.theme.faviconUrl } : undefined,
-  };
+  try {
+    const headersList = await headers();
+    const domain = headersList.get('x-store-domain') || 'localhost';
+    const store = await getStoreByDomain(domain);
+    
+    return {
+      title: store?.name || "EcomSaaS Storefront",
+      description: "Modern e-commerce storefront",
+      icons: store?.theme.faviconUrl ? { icon: store.theme.faviconUrl } : undefined,
+    };
+  } catch {
+    return {
+      title: "EcomSaaS Storefront",
+      description: "Modern e-commerce storefront",
+    };
+  }
 }
 
 export default async function RootLayout({
@@ -21,11 +28,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const headersList = await headers();
-  const domain = headersList.get('x-store-domain') || 'localhost';
+  let store = null;
   
-  // Fetch store with theme
-  const store = await getStoreByDomain(domain);
+  try {
+    const headersList = await headers();
+    const domain = headersList.get('x-store-domain') || 'localhost';
+    store = await getStoreByDomain(domain);
+  } catch (error) {
+    console.error('Failed to load store in layout:', error);
+  }
   
   // Default theme if no store found
   const defaultTheme = {

@@ -12,6 +12,32 @@ import productRoutes from './routes/products.js';
 import categoryRoutes from './routes/categories.js';
 import storeRoutes from './routes/store.js';
 
+// Type declarations for JWT
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: {
+      userId: string;
+      storeId: string;
+      role: string;
+    };
+    user: {
+      userId: string;
+      storeId: string;
+      role: string;
+    };
+  }
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: {
+      userId: string;
+      storeId: string;
+      role: string;
+    };
+  }
+}
+
 const fastify = Fastify({ 
   logger: true,
   // Security: Disable powered by header
@@ -234,14 +260,6 @@ fastify.post('/api/auth/login', {
   }
 });
 
-  return reply.send({ token, storeId: user.storeId });
-
-  } catch (error) {
-    fastify.log.error(error);
-    return reply.status(500).send({ error: 'Internal Server Error' });
-  }
-});
-
 // ----------------------------------------------------
 // 3. UPDATE STORE THEME API (Protected)
 // ----------------------------------------------------
@@ -283,6 +301,12 @@ fastify.put('/api/store/theme', {
         properties: {
           message: { type: 'string' },
           data: { type: 'object' }
+        }
+      },
+      401: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
         }
       },
       500: {
