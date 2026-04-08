@@ -30,7 +30,7 @@ declare module '@fastify/jwt' {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: {
+    user: {
       userId: string;
       storeId: string;
       role: string;
@@ -41,7 +41,8 @@ declare module 'fastify' {
 const fastify = Fastify({ 
   logger: true,
   // Security: Disable powered by header
-  disableRequestLogging: false
+  disableRequestLogging: false,
+  trustProxy: true
 });
 
 // Security: Add helmet for security headers
@@ -89,6 +90,17 @@ await fastify.register(swaggerUI, {
   uiConfig: {
     docExpansion: 'full',
     deepLinking: false
+  },
+  uiHooks: {
+    onRequest: function (request, reply, next) {
+      const b64auth = (request.headers.authorization || '').split(' ')[1] || '';
+      const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+      if (login === 'admin' && password === 'admin') {
+        return next();
+      }
+      reply.header('WWW-Authenticate', 'Basic realm="Swagger Docs"');
+      reply.code(401).send();
+    }
   }
 });
 
@@ -250,7 +262,7 @@ fastify.post('/api/auth/login', {
       userId: user.id, 
       storeId: user.storeId,
       role: user.role 
-    });
+    }, { expiresIn: '7d' });
 
     return reply.send({ token, storeId: user.storeId });
 
@@ -321,10 +333,26 @@ fastify.put('/api/store/theme', {
   const { storeId } = request.user as { storeId: string };
   const themeData = request.body as any;
   
+  // Security: Theme update allowlist & sanitize CSS
+  const allowedThemeFields = [
+    'primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 
+    'surfaceColor', 'textColor', 'textSecondaryColor', 'borderColor', 
+    'borderRadius', 'fontFamily', 'logoUrl', 'faviconUrl'
+  ];
+  
+  const sanitizedThemeData: any = {};
+  for (const field of allowedThemeFields) {
+    if (themeData[field] !== undefined && typeof themeData[field] === 'string') {
+      const val = themeData[field].trim();
+      // Basic sanitization
+      sanitizedThemeData[field] = val.replace(/[<>'"\\\\]/g, '').slice(0, 500);
+    }
+  }
+
   try {
     const updatedStore = await db.update(stores)
       .set({
-        ...themeData,
+        ...sanitizedThemeData,
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId))

@@ -1,11 +1,22 @@
 import { FastifyInstance } from 'fastify';
 import { db, categories, subcategories } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
+import { z } from 'zod';
+
+const categorySchema = z.object({
+  nameEn: z.string().min(1, "Name is required"),
+  nameAr: z.string().optional().nullable()
+});
+
+const subcategorySchema = z.object({
+  nameEn: z.string().min(1, "Name is required"),
+  nameAr: z.string().optional().nullable()
+});
 
 // Extend FastifyRequest for JWT user
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: {
+    user: {
       userId: string;
       storeId: string;
       role: string;
@@ -69,13 +80,14 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
   // 3. CREATE CATEGORY
   fastify.post('/', async (request, reply) => {
     const { storeId } = request.user as { storeId: string };
-    const categoryData = request.body as any;
+    
+    const parsed = categorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.format() });
+    }
+    const categoryData = parsed.data;
 
     try {
-      if (!categoryData.nameEn) {
-        return reply.status(400).send({ error: 'nameEn is required' });
-      }
-
       const newCategory = await db.insert(categories).values({
         ...categoryData,
         storeId,
@@ -92,7 +104,12 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
   fastify.put<{ Params: { id: string } }>('/:id', async (request, reply) => {
     const { storeId } = request.user as { storeId: string };
     const { id } = request.params;
-    const categoryData = request.body as any;
+
+    const parsed = categorySchema.partial().safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.format() });
+    }
+    const categoryData = parsed.data;
 
     try {
       const updatedCategory = await db.update(categories)
@@ -170,13 +187,14 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>('/:id/subcategories', async (request, reply) => {
     const { storeId } = request.user as { storeId: string };
     const { id } = request.params;
-    const subcatData = request.body as any;
+
+    const parsed = subcategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.format() });
+    }
+    const subcatData = parsed.data;
 
     try {
-      if (!subcatData.nameEn) {
-        return reply.status(400).send({ error: 'nameEn is required' });
-      }
-
       const newSubcategory = await db.insert(subcategories).values({
         nameEn: subcatData.nameEn,
         nameAr: subcatData.nameAr || null,

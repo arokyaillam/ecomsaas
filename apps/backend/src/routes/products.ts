@@ -1,11 +1,35 @@
 import { FastifyInstance } from 'fastify';
 import { db, products, categories, subcategories, modifierGroups } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
+import { z } from 'zod';
+
+const productSchema = z.object({
+  categoryId: z.string().min(1, "Category is required"),
+  subcategoryId: z.string().optional().nullable(),
+  titleEn: z.string().min(1, "Title in English is required"),
+  titleAr: z.string().optional().nullable(),
+  sortOrder: z.coerce.number().int().optional(),
+  preparationTime: z.coerce.number().int().optional().nullable(),
+  tags: z.string().optional().nullable(),
+  images: z.string().optional().nullable(),
+  youtubeVideoLinkId: z.string().optional().nullable(),
+  descriptionEn: z.string().optional().nullable(),
+  descriptionAr: z.string().optional().nullable(),
+  salePrice: z.coerce.string().min(1, "Sale price must be provided"),
+  purchasePrice: z.coerce.string().optional().nullable(),
+  purchaseLimit: z.coerce.number().int().optional().nullable(),
+  barcode: z.string().optional().nullable(),
+  discountType: z.string().optional(),
+  discount: z.coerce.string().optional(),
+  souqDealDiscount: z.coerce.string().optional().nullable(),
+  currentQuantity: z.coerce.number().int().optional(),
+  isPublished: z.boolean().optional()
+});
 
 // Extend FastifyRequest for JWT user
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: {
+    user: {
       userId: string;
       storeId: string;
       role: string;
@@ -78,9 +102,15 @@ export default async function productRoutes(fastify: FastifyInstance) {
       }
     }
 
+    const parsed = productSchema.safeParse(productData);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { general: 'Validation failed', details: parsed.error.format() } });
+    }
+    const validData = parsed.data;
+
     try {
       const newProduct = await db.insert(products).values({
-        ...productData,
+        ...validData,
         storeId,
       }).returning();
 
@@ -104,8 +134,14 @@ export default async function productRoutes(fastify: FastifyInstance) {
       }
     }
 
+    const parsed = productSchema.partial().safeParse(productData);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.format() });
+    }
+    const validData = parsed.data;
+
     // Strip immutable system fields from the payload before applying to the database
-    const payloadToUpdate = { ...productData };
+    const payloadToUpdate = { ...validData } as any;
     delete payloadToUpdate.id;
     delete payloadToUpdate.storeId;
     delete payloadToUpdate.createdAt;

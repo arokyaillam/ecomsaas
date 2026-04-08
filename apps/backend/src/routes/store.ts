@@ -12,21 +12,10 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     fastify.log.info(`Fetching store by domain: ${domain}`);
     
     try {
-      let storeArr = [];
-
-      // If domain is localhost, just fetch the first store for local development convenience
-      if (domain.toLowerCase() === 'localhost') {
-        fastify.log.info('Domain is localhost, fetching first store');
-        storeArr = await db.select()
-          .from(stores)
-          .orderBy(stores.createdAt)
-          .limit(1);
-      } else {
-        storeArr = await db.select()
-          .from(stores)
-          .where(eq(stores.domain, domain.toLowerCase()))
-          .limit(1);
-      }
+      const storeArr = await db.select()
+        .from(stores)
+        .where(eq(stores.domain, domain.toLowerCase()))
+        .limit(1);
       
       fastify.log.info(`Found ${storeArr.length} stores`);
       
