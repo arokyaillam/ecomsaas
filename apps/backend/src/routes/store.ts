@@ -4,17 +4,41 @@ import { eq, and } from 'drizzle-orm';
 
 // Public route - no auth required
 export default async function storeRoutes(fastify: FastifyInstance) {
+
+  // Rate limit configuration for public endpoints
+  const publicRateLimit = {
+    max: 60,
+    timeWindow: '1 minute',
+    keyGenerator: (req: any) => req.ip || 'unknown',
+    errorResponseBuilder: () => ({ error: 'Too many requests, please try again later' })
+  };
+
+  // Security: UUID validation helper
+  const isValidUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
   
   // GET Store by Domain (Public)
-  fastify.get('/by-domain/:domain', async (request, reply) => {
+  fastify.get('/by-domain/:domain', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
     const { domain } = request.params as { domain: string };
-    
-    fastify.log.info(`Fetching store by domain: ${domain}`);
-    
+
+    // Security: Validate domain format
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
+    const sanitizedDomain = domain.toLowerCase().trim();
+
+    if (!domainRegex.test(sanitizedDomain) && !sanitizedDomain.match(/^[a-z0-9-]+$/)) {
+      return reply.status(400).send({ error: 'Invalid domain format' });
+    }
+
+    fastify.log.info(`Fetching store by domain: ${sanitizedDomain}`);
+
     try {
       const storeArr = await db.select()
         .from(stores)
-        .where(eq(stores.domain, domain.toLowerCase()))
+        .where(eq(stores.domain, sanitizedDomain))
         .limit(1);
       
       fastify.log.info(`Found ${storeArr.length} stores`);
@@ -51,15 +75,22 @@ export default async function storeRoutes(fastify: FastifyInstance) {
           }
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
 
   // GET Store Products (Public)
-  fastify.get('/:storeId/products', async (request, reply) => {
+  fastify.get('/:storeId/products', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
     const { storeId } = request.params as { storeId: string };
+
+    // Security: Validate UUID format
+    if (!isValidUUID(storeId)) {
+      return reply.status(400).send({ error: 'Invalid store ID format' });
+    }
     
     fastify.log.info(`Fetching products for store: ${storeId}`);
     
@@ -71,15 +102,22 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       fastify.log.info(`Found ${productsArr.length} products`);
       
       return reply.send({ data: productsArr });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
 
   // GET Store Categories (Public)
-  fastify.get('/:storeId/categories', async (request, reply) => {
+  fastify.get('/:storeId/categories', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
     const { storeId } = request.params as { storeId: string };
+
+    // Security: Validate UUID format
+    if (!isValidUUID(storeId)) {
+      return reply.status(400).send({ error: 'Invalid store ID format' });
+    }
     
     fastify.log.info(`Fetching categories for store: ${storeId}`);
     
@@ -91,15 +129,22 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       fastify.log.info(`Found ${categoriesArr.length} categories`);
       
       return reply.send({ data: categoriesArr });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
   
   // GET Store Subcategories (Public)
-  fastify.get('/:storeId/categories/:categoryId/subcategories', async (request, reply) => {
+  fastify.get('/:storeId/categories/:categoryId/subcategories', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
     const { storeId, categoryId } = request.params as { storeId: string, categoryId: string };
+
+    // Security: Validate UUID format
+    if (!isValidUUID(storeId) || !isValidUUID(categoryId)) {
+      return reply.status(400).send({ error: 'Invalid ID format' });
+    }
     
     fastify.log.info(`Fetching subcategories for store: ${storeId}, category: ${categoryId}`);
     
@@ -116,14 +161,21 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       fastify.log.info(`Found ${subcategoriesArr.length} subcategories`);
       
       return reply.send({ data: subcategoriesArr });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
-  // GET Store by ID
-  fastify.get('/:storeId', async (request, reply) => {
+  // GET Store by ID (Public)
+  fastify.get('/:storeId', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
     const { storeId } = request.params as { storeId: string };
+
+    // Security: Validate UUID format
+    if (!isValidUUID(storeId)) {
+      return reply.status(400).send({ error: 'Invalid store ID format' });
+    }
     
     fastify.log.info(`Fetching store by ID: ${storeId}`);
     
@@ -162,7 +214,7 @@ export default async function storeRoutes(fastify: FastifyInstance) {
           }
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }

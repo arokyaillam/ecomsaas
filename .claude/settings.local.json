@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(pnpm exec:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(rm:*)"
+    ]
+  }
+}

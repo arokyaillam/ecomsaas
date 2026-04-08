@@ -58,7 +58,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     try {
       const allProducts = await db.select().from(products).where(eq(products.storeId, storeId));
       return reply.send({ data: allProducts });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -84,7 +84,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ data: productArr[0] });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -162,7 +162,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ message: 'Product updated', data: updatedProduct[0] });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -188,7 +188,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ message: 'Product deleted' });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }

@@ -38,11 +38,14 @@ declare module 'fastify' {
   }
 }
 
-const fastify = Fastify({ 
+const fastify = Fastify({
   logger: true,
   // Security: Disable powered by header
   disableRequestLogging: false,
-  trustProxy: true
+  // Security: Only trust proxies from specific IPs (comma-separated in env var)
+  trustProxy: process.env.TRUSTED_PROXIES
+    ? process.env.TRUSTED_PROXIES.split(',').map(ip => ip.trim())
+    : ['127.0.0.1', '::1'] // Default to localhost only
 });
 
 // Security: Add helmet for security headers
@@ -95,7 +98,9 @@ await fastify.register(swaggerUI, {
     onRequest: function (request, reply, next) {
       const b64auth = (request.headers.authorization || '').split(' ')[1] || '';
       const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
-      if (login === 'admin' && password === 'admin') {
+      const swaggerUser = process.env.SWAGGER_USER || 'admin';
+      const swaggerPass = process.env.SWAGGER_PASS || 'changeme';
+      if (login === swaggerUser && password === swaggerPass) {
         return next();
       }
       reply.header('WWW-Authenticate', 'Basic realm="Swagger Docs"');
@@ -194,7 +199,7 @@ fastify.post('/api/auth/register', {
 
     return reply.status(201).send({ message: 'Store created successfully!', storeId });
 
-  } catch (error) {
+  } catch (error: any) {
     fastify.log.error(error);
     return reply.status(500).send({ error: 'Internal Server Error' });
   }
@@ -266,7 +271,7 @@ fastify.post('/api/auth/login', {
 
     return reply.send({ token, storeId: user.storeId });
 
-  } catch (error) {
+  } catch (error: any) {
     fastify.log.error(error);
     return reply.status(500).send({ error: 'Internal Server Error' });
   }
@@ -315,6 +320,12 @@ fastify.put('/api/store/theme', {
           data: { type: 'object' }
         }
       },
+      400: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
+      },
       401: {
         type: 'object',
         properties: {
@@ -340,12 +351,31 @@ fastify.put('/api/store/theme', {
     'borderRadius', 'fontFamily', 'logoUrl', 'faviconUrl'
   ];
   
+  // URL validation helper
+  const isValidUrl = (url: string): boolean => {
+    if (!url) return true; // Allow null/empty
+    try {
+      const parsed = new URL(url);
+      // Only allow http and https protocols
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
   const sanitizedThemeData: any = {};
   for (const field of allowedThemeFields) {
     if (themeData[field] !== undefined && typeof themeData[field] === 'string') {
       const val = themeData[field].trim();
       // Basic sanitization
-      sanitizedThemeData[field] = val.replace(/[<>'"\\\\]/g, '').slice(0, 500);
+      const sanitized = val.replace(/[<>'"\\\\]/g, '').slice(0, 500);
+
+      // Validate URLs for logoUrl and faviconUrl fields
+      if ((field === 'logoUrl' || field === 'faviconUrl') && !isValidUrl(sanitized)) {
+        return reply.code(400).send({ error: `Invalid URL for ${field}` });
+      }
+
+      sanitizedThemeData[field] = sanitized;
     }
   }
 
@@ -362,10 +392,33 @@ fastify.put('/api/store/theme', {
       message: 'Theme updated successfully',
       data: updatedStore[0]
     });
-  } catch (error) {
+  } catch (error: any) {
     fastify.log.error(error);
     return reply.status(500).send({ error: 'Internal Server Error' });
   }
+});
+
+// Security: Global error handler to prevent information leakage
+fastify.setErrorHandler((error: any, request, reply) => {
+  fastify.log.error(error);
+
+  const statusCode = error.statusCode || 500;
+  const message = error.message || 'An error occurred';
+
+  // Don't leak error details in production
+  if (process.env.NODE_ENV === 'production') {
+    if (statusCode >= 500) {
+      return reply.code(500).send({ error: 'Internal Server Error' });
+    }
+    // For client errors, send the message if available
+    return reply.code(statusCode).send({ error: message });
+  }
+
+  // In development, show full error
+  return reply.code(statusCode).send({
+    error: message,
+    stack: error.stack
+  });
 });
 
 // Register routes

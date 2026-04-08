@@ -42,3 +42,38 @@ yarn-error.log*
 nul
 dev.log
 pg_logs.txt
+tmp_*.html
+tmp_*.log
+*.tmp
+
+# Testing
+**/test-results/
+**/playwright-report/
+**/coverage/
+**/.nyc_output/
+
+# Log files
+*.log
+logs/
+log/
+
+# Cache
+.cache/
+.eslintcache
+.prettiercache
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Temporary files
+*.tmp
+*.temp
+*~

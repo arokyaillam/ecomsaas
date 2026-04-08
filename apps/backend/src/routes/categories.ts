@@ -45,7 +45,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
     try {
       const allCategories = await db.select().from(categories).where(eq(categories.storeId, storeId));
       return reply.send({ data: allCategories });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -71,7 +71,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ data: categoryArr[0] });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -94,7 +94,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }).returning();
 
       return reply.status(201).send({ message: 'Category created', data: newCategory[0] });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -126,7 +126,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ message: 'Category updated', data: updatedCategory[0] });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -152,7 +152,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ message: 'Category deleted' });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -177,7 +177,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
           )
         );
       return reply.send({ data: allSubcategories });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -203,7 +203,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }).returning();
 
       return reply.status(201).send({ message: 'Subcategory created', data: newSubcategory[0] });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -228,7 +228,7 @@ export default async function categoryRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ message: 'Subcategory deleted' });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
