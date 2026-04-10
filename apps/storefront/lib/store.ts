@@ -14,6 +14,13 @@ export interface StoreTheme {
   faviconUrl: string | null;
 }
 
+export interface StoreHero {
+  image?: string | null;
+  title?: string;
+  subtitle?: string;
+  enabled?: boolean;
+}
+
 export interface Store {
   id: string;
   name: string;
@@ -21,6 +28,7 @@ export interface Store {
   currency: string;
   language: string;
   theme: StoreTheme;
+  hero: StoreHero;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -37,6 +45,8 @@ export async function getStoreByDomain(domain: string): Promise<Store | null> {
       cache: 'no-store', // Disable caching for debugging
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       }
     });
     

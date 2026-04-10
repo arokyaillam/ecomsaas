@@ -20,6 +20,13 @@ export const stores = pgTable("stores", {
   // Store Settings
   currency: text("currency").default("USD"),
   language: text("language").default("en"),
+  // Hero Section
+  heroImage: text("hero_image"),
+  heroTitle: text("hero_title").default("Welcome to Our Store"),
+  heroSubtitle: text("hero_subtitle").default("Discover amazing products at great prices"),
+  heroCtaText: text("hero_cta_text").default("Explore Collection"),
+  heroCtaLink: text("hero_cta_link").default("#products"),
+  heroEnabled: boolean("hero_enabled").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -101,6 +108,28 @@ export const modifierGroups = pgTable("modifier_groups", {
     .references(() => products.id)
     .notNull(),
   name: text("name").notNull(),
+  isRequired: boolean("is_required").default(false),
+  minSelections: integer("min_selections").default(1),
+  maxSelections: integer("max_selections").default(1),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const modifierOptions = pgTable("modifier_options", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  modifierGroupId: uuid("modifier_group_id")
+    .references(() => modifierGroups.id, { onDelete: "cascade" })
+    .notNull(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  nameEn: text("name_en").notNull(),
+  nameAr: text("name_ar"),
+  priceAdjustment: decimal("price_adjustment").default("0"),
+  imageUrl: text("image_url"),
+  sortOrder: integer("sort_order").default(0),
+  isAvailable: boolean("is_available").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

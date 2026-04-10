@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { db, stores, products, categories, subcategories } from '../db/index.js';
-import { eq, and } from 'drizzle-orm';
+import { db, stores, products, categories, subcategories, modifierGroups, modifierOptions } from '../db/index.js';
+import { eq, and, asc } from 'drizzle-orm';
 
 // Public route - no auth required
 export default async function storeRoutes(fastify: FastifyInstance) {
@@ -72,6 +72,14 @@ export default async function storeRoutes(fastify: FastifyInstance) {
             fontFamily: store.fontFamily || 'Inter, sans-serif',
             logoUrl: store.logoUrl,
             faviconUrl: store.faviconUrl,
+          },
+          hero: {
+            image: store.heroImage,
+            title: store.heroTitle || 'Welcome to Our Store',
+            subtitle: store.heroSubtitle || 'Discover amazing products at great prices',
+            ctaText: store.heroCtaText || 'Explore Collection',
+            ctaLink: store.heroCtaLink || '#products',
+            enabled: store.heroEnabled ?? true
           }
         }
       });
@@ -91,17 +99,138 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     if (!isValidUUID(storeId)) {
       return reply.status(400).send({ error: 'Invalid store ID format' });
     }
-    
+
     fastify.log.info(`Fetching products for store: ${storeId}`);
-    
+
     try {
       const productsArr = await db.select()
         .from(products)
         .where(and(eq(products.storeId, storeId), eq(products.isPublished, true)));
-      
+
+      // Fetch modifiers for each product (with error handling for backwards compatibility)
+      let productsWithModifiers: any[] = productsArr;
+      try {
+        productsWithModifiers = await Promise.all(
+          productsArr.map(async (product) => {
+            try {
+              const groups = await db.select()
+                .from(modifierGroups)
+                .where(
+                  and(
+                    eq(modifierGroups.productId, product.id),
+                    eq(modifierGroups.storeId, storeId)
+                  )
+                )
+                .orderBy(asc(modifierGroups.sortOrder));
+
+              const groupsWithOptions = await Promise.all(
+                groups.map(async (group) => {
+                  try {
+                    const options = await db.select()
+                      .from(modifierOptions)
+                      .where(
+                        and(
+                          eq(modifierOptions.modifierGroupId, group.id),
+                          eq(modifierOptions.isAvailable, true)
+                        )
+                      )
+                      .orderBy(asc(modifierOptions.sortOrder));
+                    return { ...group, options };
+                  } catch (e) {
+                    return { ...group, options: [] };
+                  }
+                })
+              );
+
+              return { ...product, modifierGroups: groupsWithOptions };
+            } catch (e) {
+              return { ...product, modifierGroups: [] };
+            }
+          })
+        );
+      } catch (e) {
+        fastify.log.warn('Modifier tables not ready, returning products without modifiers');
+      }
+
       fastify.log.info(`Found ${productsArr.length} products`);
-      
-      return reply.send({ data: productsArr });
+
+      return reply.send({ data: productsWithModifiers });
+    } catch (error: any) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  // GET Single Product with Modifiers (Public)
+  fastify.get('/:storeId/products/:productId', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
+    const { storeId, productId } = request.params as { storeId: string; productId: string };
+
+    // Security: Validate UUID format
+    if (!isValidUUID(storeId) || !isValidUUID(productId)) {
+      return reply.status(400).send({ error: 'Invalid ID format' });
+    }
+
+    try {
+      const productArr = await db.select()
+        .from(products)
+        .where(
+          and(
+            eq(products.id, productId),
+            eq(products.storeId, storeId),
+            eq(products.isPublished, true)
+          )
+        )
+        .limit(1);
+
+      if (productArr.length === 0) {
+        return reply.status(404).send({ error: 'Product not found' });
+      }
+
+      const product = productArr[0];
+
+      // Fetch modifier groups with options (with error handling for backwards compatibility)
+      let groupsWithOptions: any[] = [];
+      try {
+        const groups = await db.select()
+          .from(modifierGroups)
+          .where(
+            and(
+              eq(modifierGroups.productId, productId),
+              eq(modifierGroups.storeId, storeId)
+            )
+          )
+          .orderBy(asc(modifierGroups.sortOrder));
+
+        groupsWithOptions = await Promise.all(
+          groups.map(async (group) => {
+            try {
+              const options = await db.select()
+                .from(modifierOptions)
+                .where(
+                  and(
+                    eq(modifierOptions.modifierGroupId, group.id),
+                    eq(modifierOptions.isAvailable, true)
+                  )
+                )
+                .orderBy(asc(modifierOptions.sortOrder));
+              return { ...group, options };
+            } catch (e) {
+              return { ...group, options: [] };
+            }
+          })
+        );
+      } catch (e) {
+        fastify.log.warn('Modifier tables not ready, returning product without modifiers');
+      }
+
+      return reply.send({
+        data: {
+          ...product,
+          modifierGroups: groupsWithOptions
+        }
+      });
     } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
@@ -190,7 +319,7 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       }
 
       const store = storeArr[0];
-      
+
       return reply.send({
         data: {
           id: store.id,
@@ -211,6 +340,14 @@ export default async function storeRoutes(fastify: FastifyInstance) {
             fontFamily: store.fontFamily || 'Inter, sans-serif',
             logoUrl: store.logoUrl,
             faviconUrl: store.faviconUrl,
+          },
+          hero: {
+            image: store.heroImage,
+            title: store.heroTitle || 'Welcome to Our Store',
+            subtitle: store.heroSubtitle || 'Discover amazing products at great prices',
+            ctaText: store.heroCtaText || 'Explore Collection',
+            ctaLink: store.heroCtaLink || '#products',
+            enabled: store.heroEnabled ?? true
           }
         }
       });

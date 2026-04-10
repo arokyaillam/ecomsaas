@@ -8,6 +8,13 @@
       "when": 1775531501318,
       "tag": "0000_initial_schema_with_theme",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775736938602,
+      "tag": "0001_careless_talon",
+      "breakpoints": true
     }
   ]
 }

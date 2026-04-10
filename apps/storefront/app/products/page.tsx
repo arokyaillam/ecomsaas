@@ -1,8 +1,12 @@
 import { headers } from 'next/headers';
-import { getStoreByDomain, getStoreProducts, getStoreCategories } from '@/lib/store';
+import {
+  getStoreByDomain,
+  getStoreProducts,
+  getStoreCategories,
+} from '@/lib/store';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Header } from '@/components/Header';
+import { ProductCard } from '@/components/ProductCard';
 
 export default async function ProductsPage() {
   let store = null;
@@ -30,9 +34,17 @@ export default async function ProductsPage() {
 
   if (!store) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0f172a' }}>
-        <div className="p-8 text-center max-w-md border rounded-xl" style={{ borderColor: 'rgba(255,255,255,0.1)', background: '#1e293b' }}>
-          <h1 className="text-2xl font-bold mb-4 text-white">Store Not Found</h1>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: '#0f172a' }}
+      >
+        <div
+          className="p-8 text-center max-w-md rounded-2xl"
+          style={{ borderColor: 'rgba(255,255,255,0.1)', background: '#1e293b' }}
+        >
+          <h1 className="font-display text-3xl font-bold mb-4 text-white">
+            Store Not Found
+          </h1>
           <p style={{ color: '#94a3b8' }}>Domain: {domain}</p>
           {error && <p className="mt-2 text-red-400 text-sm">Error: {error}</p>}
         </div>
@@ -47,41 +59,106 @@ export default async function ProductsPage() {
       {/* Header */}
       <Header store={store} categories={categories} />
 
-      {/* Page Header */}
-      <section className="py-12 px-4" style={{ backgroundColor: theme.backgroundColor }}>
-        <div className="max-w-7xl mx-auto">
-          <h1
-            className="text-4xl md:text-5xl font-bold mb-4"
-            style={{
-              background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}
-          >
-            All Products
-          </h1>
-          <p className="text-lg" style={{ color: theme.textSecondaryColor }}>
-            Browse our full collection — {products.length} product{products.length !== 1 ? 's' : ''} available
-          </p>
+      {/* Page Header - Editorial Style */}
+      <section
+        className="relative py-20 px-4 sm:px-6 lg:px-8 overflow-hidden"
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
+        {/* Background decoration */}
+        <div
+          className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-10 -translate-y-1/2 translate-x-1/3"
+          style={{ backgroundColor: theme.primaryColor }}
+        />
+
+        <div className="relative z-10 max-w-7xl mx-auto">
+          {/* Breadcrumbs */}
+          <nav className="flex items-center gap-2 mb-8 text-sm">
+            <Link
+              href="/"
+              className="transition-colors hover:opacity-70"
+              style={{ color: theme.textSecondaryColor }}
+            >
+              Home
+            </Link>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={theme.textSecondaryColor}
+              strokeWidth="2"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+            <span
+              className="font-medium"
+              style={{ color: theme.textColor }}
+            >
+              Shop
+            </span>
+          </nav>
+
+          {/* Title Section */}
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-3 mb-4">
+              <div
+                className="w-12 h-px"
+                style={{ backgroundColor: theme.primaryColor }}
+              />
+              <span
+                className="text-xs uppercase tracking-[0.3em] font-medium"
+                style={{ color: theme.textSecondaryColor }}
+              >
+                Collection
+              </span>
+            </div>
+
+            <h1
+              className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold mb-4"
+              style={{ color: theme.textColor }}
+            >
+              All Products
+            </h1>
+            <p
+              className="text-lg"
+              style={{ color: theme.textSecondaryColor }}
+            >
+              Browse our full collection — {products.length} product
+              {products.length !== 1 ? 's' : ''} available
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Category Filter Bar */}
-      {categories.length > 0 && (
-        <section className="px-4 pb-8" style={{ backgroundColor: theme.backgroundColor }}>
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-wrap gap-2">
+      {/* Filters Section */}
+      <section
+        className="sticky top-20 z-30 py-4 px-4 sm:px-6 lg:px-8"
+        style={{
+          backgroundColor: `${theme.surfaceColor}f0`,
+          backdropFilter: 'blur(10px)',
+          borderTop: `1px solid ${theme.borderColor}`,
+          borderBottom: `1px solid ${theme.borderColor}`,
+        }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Category Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
               <span
-                className="px-4 py-2 rounded-full text-sm font-medium text-white cursor-pointer"
-                style={{ backgroundColor: theme.primaryColor }}
+                className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap"
+                style={{
+                  backgroundColor: theme.primaryColor,
+                  color: 'white',
+                }}
               >
-                All
+                All Products
               </span>
               {categories.map((cat: any) => (
                 <Link
                   key={cat.id}
                   href={`/category/${cat.id}`}
-                  className="px-4 py-2 rounded-full text-sm font-medium transition-colors hover:opacity-80"
+                  className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all hover:opacity-80"
                   style={{
                     backgroundColor: theme.surfaceColor,
                     border: `1px solid ${theme.borderColor}`,
@@ -92,86 +169,81 @@ export default async function ProductsPage() {
                 </Link>
               ))}
             </div>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-2">
+              <span
+                className="text-sm whitespace-nowrap"
+                style={{ color: theme.textSecondaryColor }}
+              >
+                Sort by:
+              </span>
+              <select
+                className="px-3 py-2 rounded-lg text-sm outline-none cursor-pointer"
+                style={{
+                  backgroundColor: theme.backgroundColor,
+                  border: `1px solid ${theme.borderColor}`,
+                  color: theme.textColor,
+                }}
+              >
+                <option>Featured</option>
+                <option>Price: Low to High</option>
+                <option>Price: High to Low</option>
+                <option>Newest</option>
+              </select>
+            </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Products Grid */}
-      <section className="py-8 px-4" style={{ backgroundColor: theme.backgroundColor }}>
+      <section
+        className="py-12 px-4 sm:px-6 lg:px-8"
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
         <div className="max-w-7xl mx-auto">
           {products.length === 0 ? (
             <div className="text-center py-20">
-              <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={theme.textSecondaryColor} strokeWidth="1" className="mx-auto mb-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="64"
+                height="64"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={theme.textSecondaryColor}
+                strokeWidth="1"
+                className="mx-auto mb-4"
+              >
                 <rect width="18" height="18" x="3" y="3" rx="2" />
                 <circle cx="9" cy="9" r="2" />
                 <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
               </svg>
-              <h3 className="text-xl font-semibold mb-2" style={{ color: theme.textColor }}>No products yet</h3>
-              <p style={{ color: theme.textSecondaryColor }}>Check back soon for new arrivals!</p>
+              <h3
+                className="font-display text-2xl font-semibold mb-2"
+                style={{ color: theme.textColor }}
+              >
+                No products yet
+              </h3>
+              <p style={{ color: theme.textSecondaryColor }}>
+                Check back soon for new arrivals!
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {products.map((product: any) => (
+              {products.map((product: any, index: number) => (
                 <div
                   key={product.id}
-                  className="overflow-hidden rounded-xl transition-all hover:-translate-y-1 group"
+                  className="animate-fade-up opacity-0"
                   style={{
-                    backgroundColor: theme.surfaceColor,
-                    border: `1px solid ${theme.borderColor}`
+                    animationDelay: `${index * 30}ms`,
+                    animationFillMode: 'forwards',
                   }}
                 >
-                  <div className="aspect-square relative overflow-hidden" style={{ backgroundColor: theme.backgroundColor }}>
-                    {product.images ? (
-                      <Image
-                        src={product.images.split(',')[0]}
-                        alt={product.titleEn}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={theme.textSecondaryColor} strokeWidth="1">
-                          <rect width="18" height="18" x="3" y="3" rx="2" />
-                          <circle cx="9" cy="9" r="2" />
-                          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h4 className="font-semibold mb-2 truncate" style={{ color: theme.textColor }}>
-                      {product.titleEn}
-                    </h4>
-                    <p className="text-sm mb-3 line-clamp-2" style={{ color: theme.textSecondaryColor }}>
-                      {product.descriptionEn || 'No description available'}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xl font-bold" style={{ color: theme.primaryColor }}>
-                        {store.currency} {product.salePrice}
-                      </span>
-                      {product.discount > 0 && (
-                        <span style={{ color: theme.accentColor }}>
-                          -{product.discount}{product.discountType === 'Percent' ? '%' : ''}
-                        </span>
-                      )}
-                    </div>
-                    {product.currentQuantity <= 0 ? (
-                      <button 
-                        disabled
-                        className="w-full mt-4 py-2 text-sm text-white rounded-lg opacity-50 cursor-not-allowed transition-opacity"
-                        style={{ backgroundColor: theme.textSecondaryColor }}
-                      >
-                        Out of Stock
-                      </button>
-                    ) : (
-                      <button
-                        className="w-full mt-4 py-2 text-sm text-white rounded-lg transition-opacity hover:opacity-90"
-                        style={{ backgroundColor: theme.primaryColor }}
-                      >
-                        Add to Cart
-                      </button>
-                    )}
-                  </div>
+                  <ProductCard
+                    product={product}
+                    theme={theme}
+                    currency={store.currency}
+                  />
                 </div>
               ))}
             </div>
@@ -180,22 +252,36 @@ export default async function ProductsPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-4 mt-20" style={{ borderTop: `1px solid ${theme.borderColor}`, backgroundColor: theme.backgroundColor }}>
+      <footer
+        className="py-16 px-4 sm:px-6 lg:px-8"
+        style={{
+          borderTop: `1px solid ${theme.borderColor}`,
+          backgroundColor: theme.backgroundColor,
+        }}
+      >
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-                style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})` }}
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-display text-xl font-bold"
+                style={{
+                  background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})`,
+                }}
               >
                 {store.name.charAt(0)}
               </div>
-              <span className="font-semibold" style={{ color: theme.textColor }}>
+              <span
+                className="font-display text-xl font-semibold"
+                style={{ color: theme.textColor }}
+              >
                 {store.name}
               </span>
             </div>
-            <p className="text-sm" style={{ color: theme.textSecondaryColor }}>
-              Powered by EcomSaaS • Dynamic Theme System
+            <p
+              className="text-sm"
+              style={{ color: theme.textSecondaryColor }}
+            >
+              © 2026 {store.name}. All rights reserved.
             </p>
           </div>
         </div>

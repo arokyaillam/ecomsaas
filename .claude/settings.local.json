@@ -8,7 +8,15 @@
       "Bash(curl:*)",
       "Bash(taskkill /F /IM node.exe)",
       "Bash(taskkill //F //IM node.exe)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npx tsc:*)",
+      "Bash(taskkill /PID 23368 /F)",
+      "Bash(taskkill //PID 23368 //F)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm drizzle-kit:*)",
+      "Bash(ls -la apps/backend/drizzle/*.sql)",
+      "Bash(pnpm db:migrate)",
+      "Bash(pnpm db:push:*)"
     ]
   }
 }

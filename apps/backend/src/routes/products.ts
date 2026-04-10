@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { db, products, categories, subcategories, modifierGroups } from '../db/index.js';
-import { eq, and } from 'drizzle-orm';
+import { db, products, categories, subcategories, modifierGroups, modifierOptions } from '../db/index.js';
+import { eq, and, asc } from 'drizzle-orm';
 import { z } from 'zod';
 
 const productSchema = z.object({
@@ -64,7 +64,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 2. GET PRODUCT BY ID
+  // 2. GET PRODUCT BY ID (with modifiers)
   fastify.get<{ Params: { id: string } }>('/:id', async (request, reply) => {
     const { storeId } = request.user as { storeId: string };
     const { id } = request.params;
@@ -83,7 +83,43 @@ export default async function productRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Product not found' });
       }
 
-      return reply.send({ data: productArr[0] });
+      // Fetch modifier groups with options (wrapped in try-catch for backwards compatibility)
+      let groupsWithOptions: any[] = [];
+      try {
+        const groups = await db.select()
+          .from(modifierGroups)
+          .where(
+            and(
+              eq(modifierGroups.productId, id),
+              eq(modifierGroups.storeId, storeId)
+            )
+          )
+          .orderBy(asc(modifierGroups.sortOrder));
+
+        groupsWithOptions = await Promise.all(
+          groups.map(async (group) => {
+            try {
+              const options = await db.select()
+                .from(modifierOptions)
+                .where(eq(modifierOptions.modifierGroupId, group.id))
+                .orderBy(asc(modifierOptions.sortOrder));
+              return { ...group, options };
+            } catch (e) {
+              return { ...group, options: [] };
+            }
+          })
+        );
+      } catch (e) {
+        // Modifier tables might not exist yet
+        fastify.log.warn('Modifier tables query failed, returning product without modifiers');
+      }
+
+      return reply.send({
+        data: {
+          ...productArr[0],
+          modifierGroups: groupsWithOptions
+        }
+      });
     } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

@@ -5,12 +5,17 @@ import rateLimit from '@fastify/rate-limit';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
+import multipart from '@fastify/multipart';
+import staticPlugin from '@fastify/static';
 import bcrypt from 'bcrypt';
 import { db, users, stores } from './db/index.js';
 import { eq } from 'drizzle-orm';
+import { join } from 'path';
 import productRoutes from './routes/products.js';
 import categoryRoutes from './routes/categories.js';
 import storeRoutes from './routes/store.js';
+import uploadRoutes from './routes/upload.js';
+import modifierRoutes from './routes/modifiers.js';
 
 // Type declarations for JWT
 declare module '@fastify/jwt' {
@@ -51,7 +56,8 @@ const fastify = Fastify({
 // Security: Add helmet for security headers
 await fastify.register(helmet, {
   contentSecurityPolicy: false, // Disable for Swagger UI
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
 });
 
 // Security: Rate limiting for auth endpoints
@@ -62,12 +68,13 @@ await fastify.register(rateLimit, {
 });
 
 // Plugins Registration using await ensures Swagger is loaded before routes
-await fastify.register(cors, { 
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://admin.ecomsaas.com'] 
-    : ['http://localhost:5173', 'http://localhost:3000'],
+await fastify.register(cors, {
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://admin.ecomsaas.com']
+    : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true 
+  credentials: true,
+  strictPreflight: false
 });
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -398,6 +405,97 @@ fastify.put('/api/store/theme', {
   }
 });
 
+// ----------------------------------------------------
+// 4. UPDATE STORE HERO API (Protected)
+// ----------------------------------------------------
+fastify.put('/api/store/hero', {
+  preHandler: async (request, reply) => {
+    try {
+      await request.jwtVerify();
+      const user = request.user as { storeId?: string };
+      if (!user?.storeId) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+    } catch {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+  },
+  schema: {
+    tags: ['Store'],
+    summary: 'Update store hero section',
+    body: {
+      type: 'object',
+      properties: {
+        heroImage: { type: 'string' },
+        heroTitle: { type: 'string' },
+        heroSubtitle: { type: 'string' },
+        heroCtaText: { type: 'string' },
+        heroCtaLink: { type: 'string' },
+        heroEnabled: { type: 'boolean' }
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          message: { type: 'string' },
+          data: { type: 'object' }
+        }
+      },
+      401: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
+      },
+      500: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
+      }
+    }
+  }
+}, async (request, reply) => {
+  const { storeId } = request.user as { storeId: string };
+  const heroData = request.body as any;
+
+  // Security: Allowlist for hero fields
+  const allowedHeroFields = [
+    'heroImage', 'heroTitle', 'heroSubtitle', 'heroCtaText', 'heroCtaLink', 'heroEnabled'
+  ];
+
+  const sanitizedHeroData: any = {};
+  for (const field of allowedHeroFields) {
+    if (heroData[field] !== undefined) {
+      if (field === 'heroEnabled') {
+        sanitizedHeroData[field] = Boolean(heroData[field]);
+      } else if (typeof heroData[field] === 'string') {
+        // Basic sanitization
+        sanitizedHeroData[field] = heroData[field].replace(/[<>'"\\\\]/g, '').slice(0, 500);
+      }
+    }
+  }
+
+  try {
+    const updatedStore = await db.update(stores)
+      .set({
+        ...sanitizedHeroData,
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId))
+      .returning();
+
+    return reply.send({
+      message: 'Hero section updated successfully',
+      data: updatedStore[0]
+    });
+  } catch (error: any) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: 'Internal Server Error' });
+  }
+});
+
 // Security: Global error handler to prevent information leakage
 fastify.setErrorHandler((error: any, request, reply) => {
   fastify.log.error(error);
@@ -421,10 +519,52 @@ fastify.setErrorHandler((error: any, request, reply) => {
   });
 });
 
+// Register multipart plugin for file uploads
+await fastify.register(multipart, {
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+    files: 5 // Max 5 files per request
+  }
+});
+
+// Register static file serving for uploaded images
+await fastify.register(staticPlugin, {
+  root: join(process.cwd(), 'public'),
+  prefix: '/',
+  decorateReply: false,
+  setHeaders: (res, path) => {
+    // Add CORS headers for uploaded images
+    if (path.includes('/uploads/')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  }
+});
+
+// Handle OPTIONS preflight for uploads
+fastify.options('/uploads/*', async (request, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  reply.status(204).send();
+});
+
+// Add CORS headers for static files before they are served
+fastify.addHook('preHandler', async (request, reply) => {
+  if (request.url?.startsWith('/uploads/')) {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  }
+});
+
 // Register routes
 await fastify.register(productRoutes, { prefix: '/api/products' });
 await fastify.register(categoryRoutes, { prefix: '/api/categories' });
 await fastify.register(storeRoutes, { prefix: '/api/store' });
+await fastify.register(uploadRoutes, { prefix: '/api/upload' });
+await fastify.register(modifierRoutes, { prefix: '/api/modifiers' });
 
 // Start the server
 try {

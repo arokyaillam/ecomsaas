@@ -2,14 +2,18 @@
     import { onMount } from 'svelte';
     import { API_BASE_URL } from '$lib/api';
     import { goto } from '$app/navigation';
+    import ImageUploader from '$components/ImageUploader.svelte';
 
     let categories = $state([] as any[]);
     let subcategories = $state([] as any[]);
     let loading = $state(true);
     let saving = $state(false);
-    
+
     let activeTab = $state('details');
-    
+
+    // Images as array for the uploader
+    let productImages = $state([] as string[]);
+
     let product = $state({
         titleEn: '',
         titleAr: '',
@@ -32,8 +36,13 @@
         currentQuantity: 0,
         isPublished: true
     });
-    
+
     let errors = $state({} as Record<string, string>);
+
+    // Sync images array to comma-separated string for API
+    $effect(() => {
+        product.images = productImages.join(',');
+    });
 
     onMount(async () => {
         const token = localStorage.getItem('merchant_token');
@@ -224,9 +233,14 @@
                         <input id="tags" type="text" bind:value={product.tags} placeholder="e.g. new, featured, sale" />
                     </div>
 
-                    <div class="input-row">
-                        <label for="images">Images (JPG) <br><small style="color:var(--text-muted)">(Recommended Width/Height: 500px * 500px)</small></label>
-                        <input id="images" type="text" bind:value={product.images} placeholder="Image URLs (comma separated)" />
+                    <div class="input-row" style="align-items: flex-start;">
+                        <label style="margin-top: 12px;">Product Images <br><small style="color:var(--text-muted)">(Recommended: 500px × 500px, Max 5 images)</small></label>
+                        <ImageUploader
+                            images={productImages}
+                            onChange={(images) => productImages = images}
+                            maxImages={5}
+                            recommendedSize="500 × 500"
+                        />
                     </div>
 
                     <div class="input-row">
@@ -315,15 +329,14 @@
             {#if activeTab === 'modifiers'}
                 <h3 style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border); text-align: center;">Modifier Options</h3>
 
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 24px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-color); border-radius: 8px;">
-                    <p style="color: var(--text-secondary);">If You Need More Choice Options For Customers Of This Product, please Click Here.</p>
-                    <button type="button" class="action-btn primary" onclick={() => alert('Modifier groups logic coming soon!')}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Add Modifier Group
-                    </button>
+                <div style="padding: 24px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-color); border-radius: 8px; text-align: center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 16px; opacity: 0.5;">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
+                    </svg>
+                    <p style="color: var(--text-secondary); margin-bottom: 8px;"><strong>Modifier groups will be available after product creation</strong></p>
+                    <p style="color: var(--text-muted); font-size: 0.875rem;">Save this product first, then you can add size options, toppings, extras, and more.</p>
                 </div>
             {/if}
         </div>
@@ -331,42 +344,48 @@
 </div>
 
 <style>
+    .tabs-container {
+        border-bottom: 1px solid var(--border-color);
+    }
+
     .tab-btn {
         flex: 1;
-        padding: 16px;
+        padding: 14px 16px;
         background: transparent;
         border: none;
         border-bottom: 2px solid transparent;
         color: var(--text-secondary);
-        font-family: 'Outfit', sans-serif;
-        font-size: 1rem;
+        font-family: var(--font-sans);
+        font-size: 0.875rem;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.15s ease;
     }
+
     .tab-btn:hover {
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
         color: var(--text-primary);
     }
+
     .tab-btn.active {
         color: var(--accent-color);
-        border-bottom: 2px solid var(--accent-color);
+        border-bottom-color: var(--accent-color);
         font-weight: 500;
-        background: rgba(255, 255, 255, 0.02);
+        background: rgba(245, 158, 11, 0.05);
     }
 
     .form-grid {
         display: flex;
         flex-direction: column;
     }
-    
+
     .input-row {
         display: grid;
-        grid-template-columns: 250px 1fr;
+        grid-template-columns: 240px 1fr;
         align-items: center;
-        padding: 16px 0;
-        border-bottom: 1px solid var(--glass-border);
+        padding: 14px 0;
+        border-bottom: 1px solid var(--border-subtle);
     }
-    
+
     .input-row:last-child {
         border-bottom: none;
     }
@@ -374,7 +393,7 @@
     .input-row label {
         color: var(--text-primary);
         font-weight: 500;
-        font-size: 0.95rem;
+        font-size: 0.875rem;
     }
 
     .input-row input[type="text"],
@@ -382,16 +401,26 @@
     .input-row select,
     .input-row textarea {
         width: 100%;
-        background: var(--input-bg);
-        border: 1px solid var(--glass-border);
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
         color: var(--text-primary);
-        padding: 12px 16px;
-        border-radius: 8px;
-        font-family: inherit;
-        font-size: 0.95rem;
+        padding: 10px 12px;
+        border-radius: 0;
+        font-family: var(--font-sans);
+        font-size: 0.875rem;
+        outline: none;
+        transition: all 0.15s ease;
     }
-    
+
+    .input-row input:focus,
+    .input-row select:focus,
+    .input-row textarea:focus {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+    }
+
     .input-row textarea {
         resize: vertical;
+        min-height: 80px;
     }
 </style>
