@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
 import { ProductCard } from '@/components/ProductCard';
+import { ArrowRight, Mail } from 'lucide-react';
 
 export default async function Home() {
   let store = null;
@@ -19,10 +20,14 @@ export default async function Home() {
     store = await getStoreByDomain(domain);
 
     if (store) {
-      [products, categories] = await Promise.all([
+      const [productsData, categoriesData] = await Promise.all([
         getStoreProducts(store.id),
         getStoreCategories(store.id),
       ]);
+
+      // Handle pagination response format
+      products = productsData?.data || productsData || [];
+      categories = categoriesData?.data || categoriesData || [];
     }
   } catch (err) {
     console.error('Error loading store data:', err);
@@ -31,290 +36,165 @@ export default async function Home() {
 
   if (!store) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center grain"
-        style={{ backgroundColor: '#0f172a' }}
-      >
-        <div
-          className="p-8 text-center max-w-md rounded-2xl"
-          style={{
-            backgroundColor: '#1e293b',
-            border: '1px solid rgba(255,255,255,0.1)',
-          }}
-        >
-          <h1 className="font-display text-3xl font-bold mb-4 text-white">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] noise">
+        <div className="p-8 text-center max-w-md border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)]">
+          <h1 className="font-mono text-3xl font-bold mb-4 text-[var(--text-primary)]">
             Store Not Found
           </h1>
-          <p className="mb-4" style={{ color: '#94a3b8' }}>
+          <p className="mb-4 text-[var(--text-secondary)]">
             Domain: {domain}
           </p>
-          {error && <p className="mb-4 text-red-400 text-sm">Error: {error}</p>}
-          <p style={{ color: '#94a3b8' }}>
-            Please make sure:
-            <br />
-            1. The backend is running on port 8000
-            <br />
-            2. Database has been migrated
-            <br />
-            3. A store exists with domain &quot;{domain}&quot;
-          </p>
+          {error && <p className="mb-4 text-[var(--accent)] text-sm font-mono">Error: {error}</p>}
+          <div className="text-[var(--text-secondary)] text-sm space-y-1">
+            <p>Please make sure:</p>
+            <p>1. Backend running on port 8000</p>
+            <p>2. Database migrated</p>
+            <p>3. Store exists for "{domain}"</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  const theme = store.theme;
+  const currency = store.currency || 'USD';
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: theme.backgroundColor }}>
+    <div className="min-h-screen bg-[var(--bg-primary)]">
       {/* Header */}
       <Header store={store} categories={categories} />
 
       {/* Hero Section */}
-      <Hero hero={store.hero} theme={theme} />
+      <Hero store={store} categories={categories} />
 
-      {/* Categories - Magazine Style */}
+      {/* Categories Section */}
       {categories.length > 0 && (
-        <section id="categories" className="py-24 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
+        <section id="categories" className="py-24 px-4 sm:px-6 lg:px-8 relative">
+          <div className="max-w-[1800px] mx-auto">
             {/* Section Header */}
             <div className="flex items-end justify-between mb-12">
               <div>
-                <div
-                  className="inline-flex items-center gap-3 mb-4"
-                >
-                  <div
-                    className="w-12 h-px"
-                    style={{ backgroundColor: theme.primaryColor }}
-                  />
-                  <span
-                    className="text-xs uppercase tracking-[0.3em] font-medium"
-                    style={{ color: theme.textSecondaryColor }}
-                  >
-                    Browse
-                  </span>
+                <div className="flex items-center gap-4 mb-4 opacity-0 animate-fade-up">
+                  <div className="w-12 h-[2px] bg-[var(--accent)]" />
+                  <span className="text-caption text-[var(--accent)]">Browse</span>
                 </div>
-                <h2
-                  className="font-display text-4xl sm:text-5xl font-semibold"
-                  style={{ color: theme.textColor }}
-                >
-                  Categories
+                <h2 className="text-display text-[var(--text-primary)] opacity-0 animate-fade-up delay-100">
+                  CATEGORIES
                 </h2>
               </div>
               <Link
                 href="/categories"
-                className="hidden sm:inline-flex items-center gap-2 text-sm font-medium line-reveal pb-1"
-                style={{ color: theme.primaryColor }}
+                className="hidden sm:flex items-center gap-2 btn-ghost"
               >
                 View All
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
-            {/* Categories Grid - Editorial Layout */}
+            {/* Categories Grid - Brutalist Style */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {categories.slice(0, 4).map((category: any, index: number) => (
                 <Link
                   key={category.id}
                   href={`/category/${category.id}`}
-                  className="group relative aspect-[4/5] rounded-2xl overflow-hidden card-editorial"
-                  style={{
-                    backgroundColor: theme.surfaceColor,
-                    border: `1px solid ${theme.borderColor}`,
-                  }}
+                  className="group relative aspect-[4/5] border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)] overflow-hidden hover:translate-y-[-8px] hover:shadow-[8px_8px_0_var(--text-primary)] transition-all duration-300 opacity-0 animate-fade-up"
+                  style={{ animationDelay: `${(index + 2) * 100}ms`, animationFillMode: 'forwards' }}
                 >
-                  {/* Background with gradient */}
-                  <div
-                    className="absolute inset-0 transition-transform duration-700 group-hover:scale-105"
-                    style={{
-                      background:
-                        index === 0
-                          ? `linear-gradient(135deg, ${theme.primaryColor}30, ${theme.accentColor}20)`
-                          : index === 1
-                            ? `linear-gradient(135deg, ${theme.accentColor}30, ${theme.primaryColor}20)`
-                            : index === 2
-                              ? `linear-gradient(135deg, ${theme.secondaryColor || theme.primaryColor}30, ${theme.accentColor}20)`
-                              : `linear-gradient(135deg, ${theme.primaryColor}20, ${theme.secondaryColor || theme.accentColor}30)`,
-                    }}
-                  />
+                  {/* Background Number */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="font-mono text-[12rem] font-bold text-[var(--text-primary)] opacity-5">
+                      0{index + 1}
+                    </span>
+                  </div>
 
                   {/* Content */}
                   <div className="absolute inset-0 p-6 flex flex-col justify-between">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-display font-semibold"
-                      style={{
-                        backgroundColor: theme.backgroundColor,
-                        color: theme.primaryColor,
-                      }}
-                    >
-                      0{index + 1}
+                    <div className="w-12 h-12 bg-[var(--accent)] flex items-center justify-center">
+                      <span className="font-mono text-xl font-bold text-[var(--bg-primary)]">
+                        0{index + 1}
+                      </span>
                     </div>
 
                     <div>
-                      <h3
-                        className="font-display text-2xl font-semibold mb-2"
-                        style={{ color: theme.textColor }}
-                      >
+                      <h3 className="font-mono text-2xl font-bold text-[var(--text-primary)] mb-1">
                         {category.nameEn}
                       </h3>
                       {category.nameAr && (
-                        <p
-                          className="text-sm"
-                          style={{ color: theme.textSecondaryColor }}
-                          dir="rtl"
-                        >
+                        <p className="text-sm text-[var(--text-secondary)]" dir="rtl">
                           {category.nameAr}
                         </p>
                       )}
-                      <div
-                        className="flex items-center gap-2 mt-4 text-sm font-medium transition-all group-hover:gap-3"
-                        style={{ color: theme.primaryColor }}
+                      <div className="flex items-center gap-2 mt-4 text-[var(--accent)] font-mono text-sm uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <span>Explore</span>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          className="transition-transform group-hover:translate-x-1"
-                        >
-                          <path d="M5 12h14" />
-                          <path d="m12 5 7 7-7 7" />
-                        </svg>
+                        <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                       </div>
                     </div>
                   </div>
+
+                  {/* Hover Border Effect */}
+                  <div className="absolute inset-0 border-4 border-[var(--accent)] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </Link>
               ))}
             </div>
 
-            {/* Mobile View All Link */}
+            {/* Mobile View All */}
             <div className="mt-8 text-center sm:hidden">
-              <Link
-                href="/categories"
-                className="inline-flex items-center gap-2 text-sm font-medium"
-                style={{ color: theme.primaryColor }}
-              >
+              <Link href="/categories" className="btn-outline">
                 View All Categories
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
               </Link>
             </div>
           </div>
         </section>
       )}
 
-      {/* Featured Products - Editorial Grid */}
+      {/* Featured Products Section */}
       {products.length > 0 && (
-        <section id="products" className="py-24 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
+        <section id="products" className="py-24 px-4 sm:px-6 lg:px-8 relative">
+          <div className="max-w-[1800px] mx-auto">
             {/* Section Header */}
             <div className="flex items-end justify-between mb-12">
               <div>
-                <div className="inline-flex items-center gap-3 mb-4">
-                  <div
-                    className="w-12 h-px"
-                    style={{ backgroundColor: theme.primaryColor }}
-                  />
-                  <span
-                    className="text-xs uppercase tracking-[0.3em] font-medium"
-                    style={{ color: theme.textSecondaryColor }}
-                  >
-                    Curated For You
-                  </span>
+                <div className="flex items-center gap-4 mb-4 opacity-0 animate-fade-up">
+                  <div className="w-12 h-[2px] bg-[var(--accent)]" />
+                  <span className="text-caption text-[var(--accent)]">Curated For You</span>
                 </div>
-                <h2
-                  className="font-display text-4xl sm:text-5xl font-semibold"
-                  style={{ color: theme.textColor }}
-                >
-                  Featured Products
+                <h2 className="text-display text-[var(--text-primary)] opacity-0 animate-fade-up delay-100">
+                  FEATURED
                 </h2>
               </div>
               <Link
                 href="/products"
-                className="hidden sm:inline-flex items-center gap-2 text-sm font-medium line-reveal pb-1"
-                style={{ color: theme.primaryColor }}
+                className="hidden sm:flex items-center gap-2 btn-ghost"
               >
                 View All Products
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
             {/* Products Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {products.slice(0, 8).map((product: any, index: number) => (
                 <div
                   key={product.id}
-                  className="animate-fade-up opacity-0"
+                  className="opacity-0 animate-fade-up"
                   style={{
-                    animationDelay: `${index * 100}ms`,
+                    animationDelay: `${(index + 3) * 100}ms`,
                     animationFillMode: 'forwards',
                   }}
                 >
                   <ProductCard
                     product={product}
-                    theme={theme}
-                    currency={store.currency}
+                    store={store}
+                    currency={currency}
                   />
                 </div>
               ))}
             </div>
 
-            {/* Mobile View All Link */}
+            {/* Mobile View All */}
             <div className="mt-12 text-center sm:hidden">
-              <Link
-                href="/products"
-                className="inline-flex items-center gap-2 text-sm font-medium"
-                style={{ color: theme.primaryColor }}
-              >
+              <Link href="/products" className="btn-outline">
                 View All Products
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
               </Link>
             </div>
           </div>
@@ -322,199 +202,128 @@ export default async function Home() {
       )}
 
       {/* Newsletter Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div
-            className="relative rounded-3xl p-12 md:p-16 overflow-hidden"
-            style={{
-              backgroundColor: theme.surfaceColor,
-              border: `1px solid ${theme.borderColor}`,
-            }}
-          >
-            {/* Background decoration */}
-            <div
-              className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2"
-              style={{ backgroundColor: theme.primaryColor }}
-            />
-            <div
-              className="absolute bottom-0 left-0 w-64 h-64 rounded-full blur-3xl opacity-10 translate-y-1/2 -translate-x-1/2"
-              style={{ backgroundColor: theme.accentColor }}
-            />
+      <section className="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        {/* Background Elements */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[var(--accent)] opacity-5 blur-[150px] rounded-full" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[var(--text-primary)] opacity-3 blur-[100px] rounded-full" />
 
-            <div className="relative z-10 max-w-2xl mx-auto text-center">
-              <div
-                className="inline-flex items-center gap-3 mb-6"
-              >
-                <div
-                  className="w-12 h-px"
-                  style={{ backgroundColor: theme.primaryColor }}
-                />
-                <span
-                  className="text-xs uppercase tracking-[0.3em] font-medium"
-                  style={{ color: theme.textSecondaryColor }}
-                >
-                  Newsletter
-                </span>
-                <div
-                  className="w-12 h-px"
-                  style={{ backgroundColor: theme.primaryColor }}
-                />
+        <div className="max-w-[1800px] mx-auto">
+          <div className="relative border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)] p-12 md:p-16">
+            <div className="max-w-2xl mx-auto text-center">
+              <div className="flex items-center justify-center gap-4 mb-6">
+                <div className="w-12 h-[2px] bg-[var(--accent)]" />
+                <span className="text-caption text-[var(--accent)]">Newsletter</span>
+                <div className="w-12 h-[2px] bg-[var(--accent)]" />
               </div>
 
-              <h2
-                className="font-display text-4xl sm:text-5xl font-semibold mb-4"
-                style={{ color: theme.textColor }}
-              >
-                Stay in the Loop
+              <h2 className="font-mono text-4xl sm:text-5xl font-bold text-[var(--text-primary)] mb-4">
+                JOIN THE CLUB
               </h2>
-              <p
-                className="text-lg mb-8"
-                style={{ color: theme.textSecondaryColor }}
-              >
-                Subscribe to receive exclusive offers, early access to new arrivals,
-                and curated style inspiration.
+              <p className="text-body-lg text-[var(--text-secondary)] mb-8">
+                Subscribe for exclusive drops, early access &amp; curated inspiration.
               </p>
 
               <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
                 <input
                   type="email"
-                  placeholder="Enter your email"
-                  className="flex-1 px-6 py-4 rounded-full text-base outline-none transition-all focus:ring-2"
-                  style={{
-                    backgroundColor: theme.backgroundColor,
-                    border: `1px solid ${theme.borderColor}`,
-                    color: theme.textColor,
-                  }}
+                  placeholder="YOUR EMAIL"
+                  className="flex-1 px-6 py-4 bg-[var(--bg-primary)] border-2 border-[var(--border)] text-[var(--text-primary)] font-mono uppercase placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
                 />
                 <button
                   type="submit"
-                  className="px-8 py-4 rounded-full font-medium text-white transition-all hover:opacity-90 whitespace-nowrap"
-                  style={{ backgroundColor: theme.primaryColor }}
+                  className="btn-brutalist whitespace-nowrap"
                 >
                   Subscribe
                 </button>
               </form>
             </div>
+
+            {/* Decorative Corner */}
+            <div className="absolute top-4 right-4 w-4 h-4 bg-[var(--accent)]" />
+            <div className="absolute bottom-4 left-4 w-4 h-4 bg-[var(--accent)]" />
           </div>
         </div>
       </section>
 
-      {/* Footer - Editorial Style */}
-      <footer
-        className="py-16 px-4 sm:px-6 lg:px-8"
-        style={{
-          borderTop: `1px solid ${theme.borderColor}`,
-          backgroundColor: theme.backgroundColor,
-        }}
-      >
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+      {/* Footer - Neo-Brutalist */}
+      <footer className="py-16 px-4 sm:px-6 lg:px-8 border-t-4 border-[var(--text-primary)]">
+        <div className="max-w-[1800px] mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
             {/* Brand Column */}
-            <div className="md:col-span-2">
+            <div className="lg:col-span-2">
               <div className="flex items-center gap-3 mb-6">
-                {theme.logoUrl ? (
-                  <img
-                    src={theme.logoUrl}
-                    alt={store.name}
-                    className="w-10 h-10 rounded-lg object-contain"
-                  />
-                ) : (
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-display text-xl font-bold"
-                    style={{
-                      background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})`,
-                    }}
-                  >
-                    {store.name.charAt(0)}
-                  </div>
-                )}
-                <span
-                  className="font-display text-2xl font-semibold"
-                  style={{ color: theme.textColor }}
+                <div className="w-12 h-12 bg-[var(--accent)] flex items-center justify-center"
                 >
+                  <span className="font-mono text-2xl font-bold text-[var(--bg-primary)]">
+                    {store.name.charAt(0)}
+                  </span>
+                </div>
+                <span className="font-mono text-2xl font-bold text-[var(--text-primary)]">
                   {store.name}
                 </span>
               </div>
-              <p
-                className="text-base leading-relaxed max-w-sm mb-6"
-                style={{ color: theme.textSecondaryColor }}
-              >
-                Curating exceptional products for those who appreciate quality,
-                design, and craftsmanship.
+              <p className="text-body text-[var(--text-secondary)] max-w-md mb-6">
+                Curating exceptional products for those who appreciate raw design,
+                honest craftsmanship, and brutalist aesthetics.
               </p>
 
               {/* Social Links */}
               <div className="flex items-center gap-4">
-                {['Instagram', 'Twitter', 'Pinterest'].map((social) => (
-                  <a
-                    key={social}
-                    href="#"
-                    className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110"
-                    style={{
-                      backgroundColor: theme.surfaceColor,
-                      border: `1px solid ${theme.borderColor}`,
-                      color: theme.textSecondaryColor,
-                    }}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      {social === 'Instagram' && (
-                        <>
-                          <rect width="20" height="20" x="2" y="2" rx="5" />
-                          <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                          <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-                        </>
-                      )}
-                      {social === 'Twitter' && (
-                        <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.5 4-8 8-5 1.4.7 2.3 1.9 3 3.4z" />
-                      )}
-                      {social === 'Pinterest' && (
-                        <line x1="12" x2="12" y1="8" y2="21" />
-                      )}
-                    </svg>
-                  </a>
-                ))}
+                {/* Instagram */}
+                <a
+                  href="#"
+                  className="w-12 h-12 border-2 border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-all"
+                  aria-label="Instagram"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="2" y="2" width="20" height="20" rx="5" strokeWidth="2"/>
+                    <circle cx="12" cy="12" r="4" strokeWidth="2"/>
+                    <circle cx="18" cy="6" r="1" fill="currentColor"/>
+                  </svg>
+                </a>
+                {/* Twitter/X */}
+                <a
+                  href="#"
+                  className="w-12 h-12 border-2 border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-all"
+                  aria-label="Twitter"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </a>
+                {/* Email */}
+                <a
+                  href="#"
+                  className="w-12 h-12 border-2 border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-all"
+                  aria-label="Email"
+                >
+                  <Mail className="w-5 h-5" />
+                </a>
               </div>
             </div>
 
             {/* Quick Links */}
             <div>
-              <h4
-                className="font-display text-lg font-semibold mb-6"
-                style={{ color: theme.textColor }}
-              >
+              <h4 className="font-mono text-lg font-bold text-[var(--text-primary)] mb-6 uppercase">
                 Quick Links
               </h4>
               <ul className="space-y-3">
-                {['Shop All', 'Categories', 'New Arrivals', 'Sale'].map(
-                  (link) => (
-                    <li key={link}>
-                      <Link
-                        href="#"
-                        className="text-sm transition-colors hover:opacity-70 line-reveal inline-block"
-                        style={{ color: theme.textSecondaryColor }}
-                      >
-                        {link}
-                      </Link>
-                    </li>
-                  )
-                )}
+                {['Shop All', 'Categories', 'New Arrivals', 'Sale'].map((link) => (
+                  <li key={link}>
+                    <Link
+                      href="#"
+                      className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors font-mono text-sm uppercase tracking-wider"
+                    >
+                      {link}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
 
             {/* Support */}
             <div>
-              <h4
-                className="font-display text-lg font-semibold mb-6"
-                style={{ color: theme.textColor }}
-              >
+              <h4 className="font-mono text-lg font-bold text-[var(--text-primary)] mb-6 uppercase">
                 Support
               </h4>
               <ul className="space-y-3">
@@ -522,8 +331,7 @@ export default async function Home() {
                   <li key={link}>
                     <Link
                       href="#"
-                      className="text-sm transition-colors hover:opacity-70 line-reveal inline-block"
-                      style={{ color: theme.textSecondaryColor }}
+                      className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors font-mono text-sm uppercase tracking-wider"
                     >
                       {link}
                     </Link>
@@ -534,28 +342,20 @@ export default async function Home() {
           </div>
 
           {/* Bottom Bar */}
-          <div
-            className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4"
-            style={{ borderTop: `1px solid ${theme.borderColor}` }}
-          >
-            <p
-              className="text-sm"
-              style={{ color: theme.textSecondaryColor }}
-            >
+          <div className="pt-8 border-t-2 border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-caption text-[var(--text-muted)]">
               © 2026 {store.name}. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <Link
                 href="#"
-                className="text-sm transition-colors hover:opacity-70"
-                style={{ color: theme.textSecondaryColor }}
+                className="text-caption text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Privacy Policy
               </Link>
               <Link
                 href="#"
-                className="text-sm transition-colors hover:opacity-70"
-                style={{ color: theme.textSecondaryColor }}
+                className="text-caption text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Terms of Service
               </Link>

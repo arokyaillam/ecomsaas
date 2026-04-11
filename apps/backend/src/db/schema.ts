@@ -1,9 +1,53 @@
 import { pgTable, text, timestamp, uuid, integer, decimal, boolean, json } from "drizzle-orm/pg-core";
 
+// Super Admin users (platform level)
+export const superAdmins = pgTable("super_admins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name"),
+  isActive: boolean("is_active").default(true),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Merchant Plans
+export const merchantPlans = pgTable("merchant_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description"),
+  price: decimal("price").default("0"),
+  currency: text("currency").default("USD"),
+  interval: text("interval").default("month"), // month, year
+  features: json("features").$type<string[]>(),
+  maxProducts: integer("max_products").default(100),
+  maxStorage: integer("max_storage").default(1024), // MB
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const stores = pgTable("stores", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   domain: text("domain").notNull().unique(),
+  // Merchant Status
+  status: text("status").default("pending").notNull(), // pending, active, suspended, deactivated
+  isApproved: boolean("is_approved").default(false),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: uuid("approved_by").references(() => superAdmins.id),
+  // Plan & Billing
+  planId: uuid("plan_id").references(() => merchantPlans.id),
+  planExpiresAt: timestamp("plan_expires_at"),
+  // Owner Info
+  ownerEmail: text("owner_email").notNull(),
+  ownerName: text("owner_name"),
+  ownerPhone: text("owner_phone"),
+  // Store Stats
+  totalOrders: integer("total_orders").default(0),
+  totalRevenue: decimal("total_revenue").default("0"),
+  totalCustomers: integer("total_customers").default(0),
   // Theme Settings
   primaryColor: text("primary_color").default("#0ea5e9"),
   secondaryColor: text("secondary_color").default("#6366f1"),
@@ -99,15 +143,75 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const modifierGroups = pgTable("modifier_groups", {
+// Product Variants (e.g., Size: Small/Medium/Large, Color: Red/Blue)
+export const productVariants = pgTable("product_variants", {
   id: uuid("id").primaryKey().defaultRandom(),
   storeId: uuid("store_id")
     .references(() => stores.id)
     .notNull(),
   productId: uuid("product_id")
-    .references(() => products.id)
+    .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
+  nameEn: text("name_en").notNull(), // e.g., "Size", "Color"
+  nameAr: text("name_ar"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Product Variant Options (e.g., Small, Medium, Large)
+export const productVariantOptions = pgTable("product_variant_options", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  variantId: uuid("variant_id")
+    .references(() => productVariants.id, { onDelete: "cascade" })
+    .notNull(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  nameEn: text("name_en").notNull(), // e.g., "Small", "Large"
+  nameAr: text("name_ar"),
+  priceAdjustment: decimal("price_adjustment").default("0"), // Additional cost for this option
+  sku: text("sku"), // Unique SKU for this variant combination
+  stockQuantity: integer("stock_quantity"), // Stock specific to this variant
+  imageUrl: text("image_url"), // Optional image for this variant
+  sortOrder: integer("sort_order").default(0),
+  isAvailable: boolean("is_available").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Product-Variant combinations (for inventory tracking)
+export const productVariantCombinations = pgTable("product_variant_combinations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  productId: uuid("product_id")
+    .references(() => products.id, { onDelete: "cascade" })
+    .notNull(),
+  sku: text("sku").notNull(),
+  combinationKey: text("combination_key").notNull(), // e.g., "size:small|color:red"
+  priceAdjustment: decimal("price_adjustment").default("0"),
+  stockQuantity: integer("stock_quantity").default(0),
+  isAvailable: boolean("is_available").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const modifierGroups = pgTable("modifier_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  // Can be linked to either a product OR a category
+  productId: uuid("product_id")
+    .references(() => products.id),
+  categoryId: uuid("category_id")
+    .references(() => categories.id),
+  // Type: 'product' for product-specific modifiers, 'category' for category-wide modifiers
+  applyTo: text("apply_to").notNull().default("product"), // 'product' or 'category'
   name: text("name").notNull(),
+  nameAr: text("name_ar"),
   isRequired: boolean("is_required").default(false),
   minSelections: integer("min_selections").default(1),
   maxSelections: integer("max_selections").default(1),
@@ -132,5 +236,286 @@ export const modifierOptions = pgTable("modifier_options", {
   isAvailable: boolean("is_available").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Customers
+export const customers = pgTable("customers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  email: text("email").notNull(),
+  password: text("password").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
+  avatarUrl: text("avatar_url"),
+  isVerified: boolean("is_verified").default(false),
+  marketingEmails: boolean("marketing_emails").default(true),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Customer Addresses
+export const customerAddresses = pgTable("customer_addresses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  customerId: uuid("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  name: text("name").notNull(), // e.g., "Home", "Office"
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  addressLine1: text("address_line_1").notNull(),
+  addressLine2: text("address_line_2"),
+  city: text("city").notNull(),
+  state: text("state"),
+  country: text("country").notNull(),
+  postalCode: text("postal_code").notNull(),
+  phone: text("phone"),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Orders
+export const orders = pgTable("orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  customerId: uuid("customer_id")
+    .references(() => customers.id),
+  orderNumber: text("order_number").notNull().unique(),
+  status: text("status").default("pending").notNull(), // pending, confirmed, processing, shipped, delivered, cancelled
+  paymentStatus: text("payment_status").default("pending").notNull(), // pending, paid, failed, refunded, partially_refunded
+  fulfillmentStatus: text("fulfillment_status").default("unfulfilled").notNull(), // unfulfilled, partial, fulfilled
+  email: text("email").notNull(), // Customer email at time of order
+  phone: text("phone"),
+  currency: text("currency").notNull(),
+  subtotal: decimal("subtotal").notNull(),
+  tax: decimal("tax").default("0"),
+  shipping: decimal("shipping").default("0"),
+  discount: decimal("discount").default("0"),
+  total: decimal("total").notNull(),
+  // Billing Address
+  billingName: text("billing_name"),
+  billingFirstName: text("billing_first_name"),
+  billingLastName: text("billing_last_name"),
+  billingAddressLine1: text("billing_address_line_1"),
+  billingAddressLine2: text("billing_address_line_2"),
+  billingCity: text("billing_city"),
+  billingState: text("billing_state"),
+  billingCountry: text("billing_country"),
+  billingPostalCode: text("billing_postal_code"),
+  // Shipping Address
+  shippingName: text("shipping_name"),
+  shippingFirstName: text("shipping_first_name"),
+  shippingLastName: text("shipping_last_name"),
+  shippingAddressLine1: text("shipping_address_line_1"),
+  shippingAddressLine2: text("shipping_address_line_2"),
+  shippingCity: text("shipping_city"),
+  shippingState: text("shipping_state"),
+  shippingCountry: text("shipping_country"),
+  shippingPostalCode: text("shipping_postal_code"),
+  // Payment
+  paymentMethod: text("payment_method"),
+  paymentIntentId: text("payment_intent_id"),
+  // Shipping
+  shippingMethod: text("shipping_method"),
+  shippingCarrier: text("shipping_carrier"),
+  trackingNumber: text("tracking_number"),
+  shippedAt: timestamp("shipped_at"),
+  deliveredAt: timestamp("delivered_at"),
+  // Discounts
+  couponCode: text("coupon_code"),
+  couponId: uuid("coupon_id"),
+  // Metadata
+  notes: text("notes"), // Customer notes
+  adminNotes: text("admin_notes"), // Internal notes
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Order Items
+export const orderItems = pgTable("order_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id")
+    .references(() => orders.id, { onDelete: "cascade" })
+    .notNull(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  productId: uuid("product_id")
+    .references(() => products.id),
+  productTitle: text("product_title").notNull(),
+  productImage: text("product_image"),
+  variantName: text("variant_name"), // e.g., "Size: Large, Color: Red"
+  quantity: integer("quantity").notNull(),
+  price: decimal("price").notNull(), // Unit price at time of order
+  total: decimal("total").notNull(), // price * quantity
+  modifiers: json("modifiers"), // Array of selected modifiers
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Reviews
+export const reviews = pgTable("reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  productId: uuid("product_id")
+    .references(() => products.id, { onDelete: "cascade" })
+    .notNull(),
+  customerId: uuid("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" }),
+  orderId: uuid("order_id")
+    .references(() => orders.id),
+  rating: integer("rating").notNull(), // 1-5
+  title: text("title"),
+  content: text("content").notNull(),
+  images: text("images"), // Comma-separated image URLs
+  isVerified: boolean("is_verified").default(false), // Verified purchase
+  isApproved: boolean("is_approved").default(true),
+  helpfulCount: integer("helpful_count").default(0),
+  response: text("response"), // Store owner response
+  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Coupons
+export const coupons = pgTable("coupons", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  code: text("code").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // percentage, fixed_amount, free_shipping
+  value: decimal("value").notNull(), // e.g., 10 for 10% or $10
+  minOrderAmount: decimal("min_order_amount"),
+  maxDiscountAmount: decimal("max_discount_amount"),
+  freeShipping: boolean("free_shipping").default(false),
+  usageLimit: integer("usage_limit"), // Total times coupon can be used
+  usageCount: integer("usage_count").default(0),
+  usageLimitPerCustomer: integer("usage_limit_per_customer").default(1),
+  isActive: boolean("is_active").default(true),
+  startsAt: timestamp("starts_at"),
+  expiresAt: timestamp("expires_at"),
+  appliesTo: text("applies_to").default("all"), // all, products, categories
+  productIds: text("product_ids"), // Comma-separated for specific products
+  categoryIds: text("category_ids"), // Comma-separated for specific categories
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Wishlists
+export const wishlists = pgTable("wishlists", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  customerId: uuid("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  productId: uuid("product_id")
+    .references(() => products.id, { onDelete: "cascade" })
+    .notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Carts (for logged-in users - persistent)
+export const carts = pgTable("carts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  customerId: uuid("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").notNull(), // For guest carts
+  couponCode: text("coupon_code"),
+  couponDiscount: decimal("coupon_discount").default("0"),
+  subtotal: decimal("subtotal").default("0"),
+  total: decimal("total").default("0"),
+  itemCount: integer("item_count").default(0),
+  expiresAt: timestamp("expires_at"), // Auto-cleanup old carts
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Cart Items
+export const cartItems = pgTable("cart_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  cartId: uuid("cart_id")
+    .references(() => carts.id, { onDelete: "cascade" })
+    .notNull(),
+  productId: uuid("product_id")
+    .references(() => products.id, { onDelete: "cascade" })
+    .notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  price: decimal("price").notNull(), // Price at time of adding
+  total: decimal("total").notNull(),
+  modifiers: json("modifiers"), // Selected modifier options
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Email Templates
+export const emailTemplates = pgTable("email_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  name: text("name").notNull(), // e.g., "order_confirmation"
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  bodyText: text("body_text"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Activity Logs
+export const activityLogs = pgTable("activity_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  userId: uuid("user_id"), // Admin user
+  customerId: uuid("customer_id"), // Customer if applicable
+  entityType: text("entity_type").notNull(), // order, product, customer, etc.
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(), // created, updated, deleted, viewed
+  metadata: json("metadata"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Store Analytics (Daily snapshots)
+export const storeAnalytics = pgTable("store_analytics", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  storeId: uuid("store_id")
+    .references(() => stores.id)
+    .notNull(),
+  date: timestamp("date").notNull(),
+  visitors: integer("visitors").default(0),
+  pageViews: integer("page_views").default(0),
+  orders: integer("orders").default(0),
+  revenue: decimal("revenue").default("0"),
+  averageOrderValue: decimal("average_order_value").default("0"),
+  conversionRate: decimal("conversion_rate").default("0"),
+  productsViewed: integer("products_viewed").default(0),
+  addToCarts: integer("add_to_carts").default(0),
+  checkoutsStarted: integer("checkouts_started").default(0),
+  checkoutsCompleted: integer("checkouts_completed").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

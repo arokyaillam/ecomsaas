@@ -134,7 +134,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
         errors: errors.length > 0 ? errors : undefined
       });
     } catch (error: any) {
-      fastify.log.logError(error);
+      fastify.log.error(error);
       return reply.status(500).send({ error: 'Failed to upload files' });
     }
   });

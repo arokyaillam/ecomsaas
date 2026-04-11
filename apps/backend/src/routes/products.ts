@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { db, products, categories, subcategories, modifierGroups, modifierOptions } from '../db/index.js';
+import { db, products, categories, subcategories, modifierGroups, modifierOptions, productVariants, productVariantOptions, productVariantCombinations } from '../db/index.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -25,17 +25,6 @@ const productSchema = z.object({
   currentQuantity: z.coerce.number().int().optional(),
   isPublished: z.boolean().optional()
 });
-
-// Extend FastifyRequest for JWT user
-declare module 'fastify' {
-  interface FastifyRequest {
-    user: {
-      userId: string;
-      storeId: string;
-      role: string;
-    };
-  }
-}
 
 export default async function productRoutes(fastify: FastifyInstance) {
   // Pre-handler hook to authenticate requests using JWT
@@ -83,21 +72,37 @@ export default async function productRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Product not found' });
       }
 
-      // Fetch modifier groups with options (wrapped in try-catch for backwards compatibility)
+      // Fetch modifier groups with options (product-specific and category-level)
       let groupsWithOptions: any[] = [];
       try {
-        const groups = await db.select()
+        // Get product-specific modifiers
+        const productGroups = await db.select()
           .from(modifierGroups)
           .where(
             and(
               eq(modifierGroups.productId, id),
-              eq(modifierGroups.storeId, storeId)
+              eq(modifierGroups.storeId, storeId),
+              eq(modifierGroups.applyTo, 'product')
             )
           )
           .orderBy(asc(modifierGroups.sortOrder));
 
+        // Get category-level modifiers
+        const categoryGroups = await db.select()
+          .from(modifierGroups)
+          .where(
+            and(
+              eq(modifierGroups.categoryId, productArr[0].categoryId),
+              eq(modifierGroups.storeId, storeId),
+              eq(modifierGroups.applyTo, 'category')
+            )
+          )
+          .orderBy(asc(modifierGroups.sortOrder));
+
+        const allGroups = [...productGroups, ...categoryGroups];
+
         groupsWithOptions = await Promise.all(
-          groups.map(async (group) => {
+          allGroups.map(async (group) => {
             try {
               const options = await db.select()
                 .from(modifierOptions)
@@ -110,14 +115,61 @@ export default async function productRoutes(fastify: FastifyInstance) {
           })
         );
       } catch (e) {
-        // Modifier tables might not exist yet
         fastify.log.warn('Modifier tables query failed, returning product without modifiers');
+      }
+
+      // Fetch product variants with options
+      let variantsWithOptions: any[] = [];
+      try {
+        const variants = await db.select()
+          .from(productVariants)
+          .where(
+            and(
+              eq(productVariants.productId, id),
+              eq(productVariants.storeId, storeId)
+            )
+          )
+          .orderBy(asc(productVariants.sortOrder));
+
+        variantsWithOptions = await Promise.all(
+          variants.map(async (variant) => {
+            try {
+              const options = await db.select()
+                .from(productVariantOptions)
+                .where(eq(productVariantOptions.variantId, variant.id))
+                .orderBy(asc(productVariantOptions.sortOrder));
+              return { ...variant, options };
+            } catch (e) {
+              return { ...variant, options: [] };
+            }
+          })
+        );
+      } catch (e) {
+        fastify.log.warn('Variant tables query failed, returning product without variants');
+      }
+
+      // Fetch variant combinations
+      let variantCombinations: any[] = [];
+      try {
+        variantCombinations = await db.select()
+          .from(productVariantCombinations)
+          .where(
+            and(
+              eq(productVariantCombinations.productId, id),
+              eq(productVariantCombinations.storeId, storeId)
+            )
+          )
+          .orderBy(asc(productVariantCombinations.sku));
+      } catch (e) {
+        fastify.log.warn('Variant combinations query failed');
       }
 
       return reply.send({
         data: {
           ...productArr[0],
-          modifierGroups: groupsWithOptions
+          modifierGroups: groupsWithOptions,
+          variants: variantsWithOptions,
+          variantCombinations: variantCombinations
         }
       });
     } catch (error: any) {

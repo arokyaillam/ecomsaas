@@ -15,6 +15,34 @@
       "when": 1775736938602,
       "tag": "0001_careless_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775736940000,
+      "tag": "0002_add_hero_cta_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775736950000,
+      "tag": "0003_add_store_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775885000000,
+      "tag": "0004_add_product_variants",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775886000000,
+      "tag": "0005_add_merchant_management",
+      "breakpoints": true
     }
   ]
 }

@@ -27,7 +27,18 @@
     let loading = $state(true);
     let storeId = $state('');
 
-    // Recent activity data - empty until backend provides real data
+    // Chart data
+    let chartData = $state([] as Array<{ date: string; orders: number; revenue: number }>);
+
+    // Chart computed values
+    let maxRevenue = $derived(chartData.length > 0 ? Math.max(...chartData.map(d => d.revenue)) : 1);
+    let chartPoints = $derived(chartData.length > 1 ? chartData.map((d, i) => {
+        const x = (i / (chartData.length - 1)) * 800;
+        const y = 200 - (d.revenue / maxRevenue) * 180;
+        return `${x},${y}`;
+    }).join(' ') : '');
+
+    // Recent activity data
     let recentActivity = $state([] as Array<{ id: number; action: string; detail: string; time: string; type: string }>);
 
     onMount(async () => {
@@ -63,10 +74,52 @@
                 stats.totalProducts = productsData.data?.length || 0;
             }
 
-            // Orders/Revenue/Customers stats would be fetched from their respective endpoints
-            stats.totalOrders = 0;
-            stats.totalRevenue = 0;
-            stats.totalCustomers = 0;
+            // Fetch orders stats
+            const ordersRes = await fetch(`${API_BASE_URL}/api/orders/admin/stats?period=today`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (ordersRes.ok) {
+                const ordersData = await ordersRes.json();
+                stats.totalOrders = Number(ordersData.data?.total_orders || 0);
+                stats.totalRevenue = Number(ordersData.data?.revenue || 0);
+            }
+
+            // Fetch total customers count
+            const customersRes = await fetch(`${API_BASE_URL}/api/customers/admin?page=1&limit=1`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (customersRes.ok) {
+                const customersData = await customersRes.json();
+                stats.totalCustomers = customersData.pagination?.total || 0;
+            }
+
+            // Fetch chart data (last 7 days)
+            const chartRes = await fetch(`${API_BASE_URL}/api/analytics/sales-chart?period=7d`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (chartRes.ok) {
+                const chartResult = await chartRes.json();
+                chartData = chartResult.data || [];
+            }
+
+            // Fetch recent activity
+            const activityRes = await fetch(`${API_BASE_URL}/api/orders/admin/recent?limit=5`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (activityRes.ok) {
+                const activityData = await activityRes.json();
+                recentActivity = activityData.data?.map((order: any) => ({
+                    id: order.id,
+                    action: `Order #${order.orderNumber || order.id.slice(0, 8)}`,
+                    detail: `${order.customerName || 'Guest'} • ${order.totalAmount ? formatCurrency(order.totalAmount) : '$0.00'}`,
+                    time: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                    type: order.status === 'completed' ? 'success' : order.status === 'pending' ? 'warning' : 'info'
+                })) || [];
+            }
 
         } catch (error) {
             console.error('Failed to fetch dashboard data:', error);
@@ -140,7 +193,6 @@
                         <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
                     </svg>
                 </div>
-                <span class="stat-trend positive">+12%</span>
             </div>
             {#if loading}
                 <div class="skeleton" style="width: 80px; height: 32px;"></div>
@@ -159,7 +211,6 @@
                         <path d="M2.5 2.5h3l2.7 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6l1.6-8.4H7.1"></path>
                     </svg>
                 </div>
-                <span class="stat-trend positive">+8%</span>
             </div>
             {#if loading}
                 <div class="skeleton" style="width: 80px; height: 32px;"></div>
@@ -177,7 +228,6 @@
                         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                     </svg>
                 </div>
-                <span class="stat-trend positive">+23%</span>
             </div>
             {#if loading}
                 <div class="skeleton" style="width: 100px; height: 32px;"></div>
@@ -196,7 +246,6 @@
                         <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
                     </svg>
                 </div>
-                <span class="stat-trend positive">+5%</span>
             </div>
             {#if loading}
                 <div class="skeleton" style="width: 80px; height: 32px;"></div>
@@ -228,35 +277,47 @@
             <div class="panel-content">
                 <div class="chart-container">
                     <div class="chart-grid grid-pattern"></div>
-                    <svg viewBox="0 0 800 200" class="w-full h-full" preserveAspectRatio="none">
-                        <defs>
-                            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.25" />
-                                <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
-                            </linearGradient>
-                        </defs>
-                        <!-- Area fill -->
-                        <path
-                            d="M0,160 Q50,150 100,140 T200,100 T300,80 T400,60 T500,50 T600,40 T700,45 T800,35 L800,200 L0,200 Z"
-                            fill="url(#chartGradient)"
-                        />
-                        <!-- Main line -->
-                        <path
-                            d="M0,160 Q50,150 100,140 T200,100 T300,80 T400,60 T500,50 T600,40 T700,45 T800,35"
-                            fill="none"
-                            stroke="#f59e0b"
-                            stroke-width="2"
-                        />
-                        <!-- Secondary line -->
-                        <path
-                            d="M0,180 Q100,170 200,165 T400,150 T600,140 T800,135"
-                            fill="none"
-                            stroke="#52525b"
-                            stroke-width="1"
-                            stroke-dasharray="4 4"
-                        />
-                    </svg>
+                    {#if loading}
+                        <div class="skeleton" style="width: 100%; height: 100%;"></div>
+                    {:else if chartData.length > 1}
+                        <svg viewBox="0 0 800 200" class="w-full h-full" preserveAspectRatio="none">
+                            <defs>
+                                <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.25" />
+                                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+                                </linearGradient>
+                            </defs>
+
+                            <!-- Area fill -->
+                            <polygon
+                                points={`0,200 ${chartPoints} 800,200`}
+                                fill="url(#chartGradient)"
+                            />
+                            <!-- Main line -->
+                            <polyline
+                                points={chartPoints}
+                                fill="none"
+                                stroke="#f59e0b"
+                                stroke-width="2"
+                            />
+                            <!-- Data points -->
+                            {#each chartData as point, i}
+                                <circle cx={(i / (chartData.length - 1)) * 800} cy={200 - (point.revenue / maxRevenue) * 180} r="4" fill="#f59e0b" />
+                            {/each}
+                        </svg>
+                    {:else}
+                        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted);">
+                            No revenue data yet
+                        </div>
+                    {/if}
                 </div>
+                {#if chartData.length > 1}
+                    <div class="chart-labels">
+                        {#each chartData.filter((_, i) => i % Math.ceil(chartData.length / 6) === 0 || i === chartData.length - 1) as point}
+                            <span>{point.date}</span>
+                        {/each}
+                    </div>
+                {/if}
             </div>
         </div>
 
@@ -267,50 +328,57 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                     </svg>
-                    Activity Log
+                    Recent Activity
                 </h3>
-                <span style="font-size: 0.625rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase;">Live</span>
             </div>
 
             <div class="panel-content">
-                <div class="activity-list">
-                    {#each recentActivity as activity}
-                        <div class="activity-item">
-                            <div class="activity-icon {activity.type}">
-                                {#if activity.type === 'success'}
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="20 6 9 17 4 12"></polyline>
-                                    </svg>
-                                {:else if activity.type === 'warning'}
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
-                                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                                    </svg>
-                                {:else}
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                    </svg>
-                                {/if}
+                {#if loading}
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        {#each Array(3) as _}
+                            <div class="skeleton" style="width: 100%; height: 50px;"></div>
+                        {/each}
+                    </div>
+                {:else if recentActivity.length === 0}
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: var(--text-muted); text-align: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 12px; opacity: 0.5;">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <p>No recent activity</p>
+                    </div>
+                {:else}
+                    <div class="activity-list">
+                        {#each recentActivity as activity}
+                            <div class="activity-item">
+                                <div class="activity-icon {activity.type}">
+                                    {#if activity.type === 'success'}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                    {:else if activity.type === 'warning'}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
+                                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                        </svg>
+                                    {:else}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                        </svg>
+                                    {/if}
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">{activity.action}</div>
+                                    <div class="activity-meta">{activity.detail}</div>
+                                </div>
+                                <div class="activity-time">{activity.time}</div>
                             </div>
-                            <div class="activity-content">
-                                <div class="activity-title">{activity.action}</div>
-                                <div class="activity-meta">{activity.detail}</div>
-                            </div>
-                            <div class="activity-time">{activity.time}</div>
-                        </div>
-                    {/each}
-                </div>
-            </div>
-
-            <div style="padding: 12px 20px; border-top: 1px solid var(--border-color); text-align: center;">
-                <button style="font-size: 0.6875rem; color: var(--text-muted); font-family: var(--font-mono); background: none; border: none; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em;">
-                    View All Logs →
-                </button>
-            </div>
-        </div>
+                        {/each}
+                    </div>
+                {/if}
+            </div>        </div>
     </div>
 
     <!-- Recent Products Panel -->
@@ -406,10 +474,7 @@
             <div class="panel-header">
                 <h3>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <zap width="16" height="16"></zap>
-                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
-                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                     </svg>
                     Quick Actions
                 </h3>
@@ -478,3 +543,14 @@
         </div>
     </div>
 </div>
+
+<style>
+    .chart-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 16px;
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+    }
+</style>

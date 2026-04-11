@@ -1,202 +1,198 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-
-interface ModifierOption {
-  id: string;
-  nameEn: string;
-  nameAr?: string;
-  priceAdjustment: string;
-  imageUrl?: string;
-  isAvailable: boolean;
-}
-
-interface ModifierGroup {
-  id: string;
-  name: string;
-  isRequired: boolean;
-  minSelections: number;
-  maxSelections: number;
-  options: ModifierOption[];
-}
-
-interface Product {
-  id: string;
-  titleEn: string;
-  titleAr?: string;
-  descriptionEn?: string;
-  descriptionAr?: string;
-  images?: string;
-  salePrice: string;
-  discount: string;
-  discountType: string;
-  currentQuantity: number;
-  modifierGroups?: ModifierGroup[];
-}
-
-interface Store {
-  id: string;
-  name: string;
-  currency: string;
-  theme: {
-    primaryColor: string;
-    accentColor: string;
-    backgroundColor: string;
-    surfaceColor: string;
-    textColor: string;
-    textSecondaryColor: string;
-    borderColor: string;
-    borderRadius: string;
-  };
-}
+import { useCart } from '@/lib/cart';
+import { useCustomerAuth } from '@/lib/customer-auth';
+import { ReviewForm } from '@/components/ReviewForm';
+import { ShoppingBag, Heart, Star, Check, Minus, Plus, ThumbsUp } from 'lucide-react';
 
 interface ProductDetailProps {
-  product: Product;
-  store: Store;
+  product: any;
+  store: any;
+  reviews: any[];
+  modifiers: any[];
 }
 
-export function ProductDetail({ product, store }: ProductDetailProps) {
-  // Filter out base64 images (backwards compatibility - old products may have them)
-  const hasBase64Image = product.images?.includes('data:');
-  const images = hasBase64Image
-    ? []
-    : product.images?.split(',').filter((url: string) => url && url.trim() !== '') || [];
-  const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+export function ProductDetail({ product, store, reviews, modifiers }: ProductDetailProps) {
+  const { addToCart } = useCart();
+  const { isAuthenticated } = useCustomerAuth();
   const [quantity, setQuantity] = useState(1);
+  const [selectedModifiers, setSelectedModifiers] = useState<any[]>([]);
+  const [activeImage, setActiveImage] = useState(0);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [wishlistId, setWishlistId] = useState<string | null>(null);
+  const [togglingWishlist, setTogglingWishlist] = useState(false);
+  const [productReviews, setProductReviews] = useState(reviews);
+  const [markingHelpful, setMarkingHelpful] = useState<string | null>(null);
 
-  const theme = store.theme;
-  const hasDiscount = Number(product.discount) > 0;
-
-  // Calculate total price with modifiers
-  const calculateTotal = () => {
-    let total = Number(product.salePrice);
-
-    // Add modifier prices
-    Object.entries(selectedModifiers).forEach(([groupId, optionIds]) => {
-      const group = product.modifierGroups?.find(g => g.id === groupId);
-      optionIds.forEach(optionId => {
-        const option = group?.options.find(o => o.id === optionId);
-        if (option) {
-          total += Number(option.priceAdjustment);
-        }
-      });
-    });
-
-    return total * quantity;
-  };
-
-  const toggleModifier = (groupId: string, optionId: string, maxSelections: number) => {
-    setSelectedModifiers(prev => {
-      const current = prev[groupId] || [];
-      const exists = current.includes(optionId);
-
-      if (exists) {
-        return { ...prev, [groupId]: current.filter(id => id !== optionId) };
-      } else {
-        // Check max selections
-        if (current.length >= maxSelections) {
-          // Remove first selected and add new (FIFO)
-          return { ...prev, [groupId]: [...current.slice(1), optionId] };
-        }
-        return { ...prev, [groupId]: [...current, optionId] };
-      }
-    });
-  };
-
-  const isModifierSelected = (groupId: string, optionId: string) => {
-    return selectedModifiers[groupId]?.includes(optionId) || false;
-  };
-
-  const canAddToCart = () => {
-    // Check required modifiers are selected
-    if (product.modifierGroups) {
-      for (const group of product.modifierGroups) {
-        if (group.isRequired) {
-          const selected = selectedModifiers[group.id] || [];
-          if (selected.length < group.minSelections) {
-            return false;
-          }
-        }
-      }
+  // Check if product is in wishlist
+  useEffect(() => {
+    if (isAuthenticated && product.id) {
+      checkWishlistStatus();
     }
-    return product.currentQuantity > 0;
+  }, [isAuthenticated, product.id]);
+
+  const checkWishlistStatus = async () => {
+    try {
+      const token = localStorage.getItem('customer_token');
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/api/wishlist/check/${product.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsInWishlist(data.data.isInWishlist);
+        setWishlistId(data.data.wishlistId);
+      }
+    } catch (err) {
+      console.error('Failed to check wishlist status:', err);
+    }
+  };
+
+  const toggleWishlist = async () => {
+    if (!isAuthenticated) {
+      alert('Please log in to add items to your wishlist');
+      return;
+    }
+
+    setTogglingWishlist(true);
+    try {
+      const token = localStorage.getItem('customer_token');
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/api/wishlist/toggle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId: product.id }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsInWishlist(data.data.isInWishlist);
+        if (data.data.id) {
+          setWishlistId(data.data.id);
+        } else {
+          setWishlistId(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle wishlist:', err);
+    } finally {
+      setTogglingWishlist(false);
+    }
+  };
+
+  const images = product.images ? product.images.split(',') : [];
+  const currencySymbol = store?.currency === 'USD' ? '$' : store?.currency === 'EUR' ? '€' : store?.currency === 'GBP' ? '£' : store?.currency || '$';
+
+  const modifierTotal = selectedModifiers.reduce((sum, mod) => sum + Number(mod.price || 0), 0);
+  const totalPrice = Number(product.salePrice || product.regularPrice) + modifierTotal;
+
+  const handleAddToCart = async () => {
+    setAddingToCart(true);
+    try {
+      await addToCart(product.id, quantity, selectedModifiers.map(m => ({ modifierId: m.id, name: m.name, price: m.price })));
+    } catch (err) {
+      console.error('Failed to add to cart:', err);
+    } finally {
+      setAddingToCart(false);
+    }
+  };
+
+  const toggleModifier = (modifier: any) => {
+    setSelectedModifiers(prev => {
+      const exists = prev.find(m => m.id === modifier.id);
+      if (exists) {
+        return prev.filter(m => m.id !== modifier.id);
+      }
+      return [...prev, modifier];
+    });
+  };
+
+  const averageRating = productReviews.length > 0
+    ? productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length
+    : 0;
+
+  const handleReviewSubmitted = (newReview: any) => {
+    setProductReviews([newReview, ...productReviews]);
+    setShowReviewForm(false);
+  };
+
+  const markHelpful = async (reviewId: string) => {
+    setMarkingHelpful(reviewId);
+    try {
+      const res = await fetch(`${API_URL}/api/reviews/${reviewId}/helpful`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        setProductReviews(productReviews.map(r =>
+          r.id === reviewId ? { ...r, helpfulCount: (r.helpfulCount || 0) + 1 } : r
+        ));
+      }
+    } catch (err) {
+      console.error('Failed to mark helpful:', err);
+    } finally {
+      setMarkingHelpful(null);
+    }
   };
 
   return (
-    <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Breadcrumb */}
-        <nav className="mb-8">
-          <Link
-            href="/products"
-            className="text-sm inline-flex items-center gap-2"
-            style={{ color: theme.textSecondaryColor }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Back to Products
-          </Link>
-        </nav>
+        <div className="flex items-center gap-2 text-sm opacity-60 mb-6">
+          <Link href="/" className="hover:opacity-100">Home</Link>
+          <span>/</span>
+          <Link href="/products" className="hover:opacity-100">Products</Link>
+          <span>/</span>
+          <span className="truncate max-w-xs">{product.titleEn}</span>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Image Gallery */}
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           <div className="space-y-4">
-            {/* Main Image */}
-            <div
-              className="relative aspect-square rounded-2xl overflow-hidden"
-              style={{ backgroundColor: theme.surfaceColor, border: `1px solid ${theme.borderColor}` }}
-            >
+            <div className="relative aspect-square rounded-2xl overflow-hidden bg-white/5">
               {images.length > 0 ? (
                 <Image
-                  src={images[selectedImage]}
+                  src={images[activeImage]}
                   alt={product.titleEn}
                   fill
-                  sizes="(max-width: 1024px) 100vw, 50vw"
                   className="object-cover"
-                  priority
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="64"
-                    height="64"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={theme.textSecondaryColor}
-                    strokeWidth="1"
-                  >
-                    <rect width="18" height="18" x="3" y="3" rx="2" />
-                    <circle cx="9" cy="9" r="2" />
-                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                  </svg>
+                  <ShoppingBag className="w-20 h-20 opacity-30" />
                 </div>
               )}
             </div>
 
-            {/* Thumbnail Strip */}
             {images.length > 1 && (
-              <div className="flex gap-3">
-                {images.map((img, idx) => (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {images.map((img: string, idx: number) => (
                   <button
                     key={idx}
-                    onClick={() => setSelectedImage(idx)}
-                    className="relative w-20 h-20 rounded-lg overflow-hidden transition-all"
-                    style={{
-                      backgroundColor: theme.surfaceColor,
-                      border: `2px solid ${selectedImage === idx ? theme.primaryColor : theme.borderColor}`,
-                    }}
+                    onClick={() => setActiveImage(idx)}
+                    className={`relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-colors ${
+                      activeImage === idx ? 'border-[var(--primary)]' : 'border-transparent'
+                    }`}
                   >
                     <Image
                       src={img}
-                      alt={`${product.titleEn} ${idx + 1}`}
+                      alt={`${product.titleEn} - ${idx + 1}`}
                       fill
-                      sizes="80px"
                       className="object-cover"
+                      unoptimized
                     />
                   </button>
                 ))}
@@ -204,163 +200,232 @@ export function ProductDetail({ product, store }: ProductDetailProps) {
             )}
           </div>
 
-          {/* Product Info */}
           <div className="space-y-6">
-            {/* Title */}
             <div>
-              <h1 className="font-display text-3xl sm:text-4xl font-semibold mb-2" style={{ color: theme.textColor }}>
-                {product.titleEn}
-              </h1>
+              <h1 className="text-3xl font-bold mb-2">{product.titleEn}</h1>
               {product.titleAr && (
-                <p className="text-lg" style={{ color: theme.textSecondaryColor }} dir="rtl">
-                  {product.titleAr}
-                </p>
+                <p className="text-lg opacity-60" dir="rtl">{product.titleAr}</p>
               )}
-            </div>
 
-            {/* Price */}
-            <div className="flex items-baseline gap-4">
-              <span className="font-display text-4xl font-bold" style={{ color: theme.primaryColor }}>
-                {store.currency} {calculateTotal().toFixed(2)}
-              </span>
-              {hasDiscount && (
-                <span className="text-xl line-through" style={{ color: theme.textSecondaryColor }}>
-                  {store.currency} {product.salePrice}
-                </span>
-              )}
-            </div>
-
-            {/* Stock Status */}
-            {product.currentQuantity <= 0 ? (
-              <div
-                className="inline-block px-4 py-2 rounded-full text-sm font-medium"
-                style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}
-              >
-                Out of Stock
-              </div>
-            ) : product.currentQuantity <= 5 ? (
-              <div
-                className="inline-block px-4 py-2 rounded-full text-sm font-medium"
-                style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: theme.accentColor }}
-              >
-                Only {product.currentQuantity} left in stock
-              </div>
-            ) : null}
-
-            {/* Description */}
-            {product.descriptionEn && (
-              <div className="py-4 border-t" style={{ borderColor: theme.borderColor }}>
-                <p style={{ color: theme.textSecondaryColor, lineHeight: 1.7 }}>
-                  {product.descriptionEn}
-                </p>
-              </div>
-            )}
-
-            {/* Modifier Groups */}
-            {product.modifierGroups && product.modifierGroups.length > 0 && (
-              <div className="space-y-6 py-4 border-t" style={{ borderColor: theme.borderColor }}>
-                {product.modifierGroups.map((group) => (
-                  <div key={group.id}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <h3 className="font-semibold" style={{ color: theme.textColor }}>
-                        {group.name}
-                      </h3>
-                      {group.isRequired && (
-                        <span
-                          className="text-xs px-2 py-0.5 rounded"
-                          style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: theme.accentColor }}
-                        >
-                          Required
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {group.options.map((option) => {
-                        const selected = isModifierSelected(group.id, option.id);
-                        const priceAdj = Number(option.priceAdjustment);
-
-                        return (
-                          <button
-                            key={option.id}
-                            onClick={() => toggleModifier(group.id, option.id, group.maxSelections)}
-                            disabled={!option.isAvailable}
-                            className="relative px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                            style={{
-                              backgroundColor: selected ? theme.primaryColor : theme.surfaceColor,
-                              border: `2px solid ${selected ? theme.primaryColor : theme.borderColor}`,
-                              color: selected ? '#fff' : theme.textColor,
-                              opacity: option.isAvailable ? 1 : 0.5,
-                            }}
-                          >
-                            {option.nameEn}
-                            {priceAdj !== 0 && (
-                              <span className="ml-1 text-xs opacity-80">
-                                {priceAdj > 0 ? `+${priceAdj}` : priceAdj}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Selection hint */}
-                    <p className="text-xs mt-2" style={{ color: theme.textSecondaryColor }}>
-                      Select {group.minSelections === group.maxSelections
-                        ? `${group.minSelections}`
-                        : `${group.minSelections}-${group.maxSelections}`}
-                    </p>
+              {reviews.length > 0 && (
+                <div className="flex items-center gap-2 mt-3">
+                  <div className="flex items-center">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= Math.round(averageRating)
+                            ? 'fill-yellow-400 text-yellow-400'
+                            : 'opacity-30'
+                        }`}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <span className="text-sm opacity-60">
+                    {averageRating.toFixed(1)} ({reviews.length} reviews)
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-bold" style={{ color: 'var(--primary)' }}>
+                {currencySymbol}{product.salePrice || product.regularPrice}
+              </span>
+              {product.salePrice && product.regularPrice && product.salePrice !== product.regularPrice && (
+                <span className="text-xl opacity-50 line-through">
+                  {currencySymbol}{product.regularPrice}
+                </span>
+              )}
+              {modifierTotal > 0 && (
+                <span className="text-sm opacity-60">
+                  + {currencySymbol}{modifierTotal} modifiers
+                </span>
+              )}
+            </div>
+
+            {product.descriptionEn && (
+              <p className="opacity-80 leading-relaxed">{product.descriptionEn}</p>
             )}
 
-            {/* Quantity and Add to Cart */}
-            <div className="pt-4 border-t space-y-4" style={{ borderColor: theme.borderColor }}>
-              {/* Quantity */}
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-medium" style={{ color: theme.textSecondaryColor }}>
-                  Quantity
-                </span>
-                <div
-                  className="flex items-center rounded-lg overflow-hidden"
-                  style={{ backgroundColor: theme.surfaceColor, border: `1px solid ${theme.borderColor}` }}
-                >
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="px-4 py-2 hover:opacity-70 transition-opacity"
-                    style={{ color: theme.textColor }}
-                  >
-                    -
-                  </button>
-                  <span className="px-4 py-2 font-medium min-w-[3rem] text-center" style={{ color: theme.textColor }}>
-                    {quantity}
-                  </span>
-                  <button
-                    onClick={() => setQuantity(Math.min(product.currentQuantity, quantity + 1))}
-                    className="px-4 py-2 hover:opacity-70 transition-opacity"
-                    style={{ color: theme.textColor }}
-                  >
-                    +
-                  </button>
+            {modifiers.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="font-semibold">Options & Add-ons</h3>
+                <div className="flex flex-wrap gap-2">
+                  {modifiers.map((modifier) => (
+                    <button
+                      key={modifier.id}
+                      onClick={() => toggleModifier(modifier)}
+                      className={`px-4 py-2 rounded-lg border transition-all text-sm ${
+                        selectedModifiers.find(m => m.id === modifier.id)
+                          ? 'border-[var(--primary)] bg-[var(--primary)]/10'
+                          : 'border-[var(--border)] hover:border-[var(--primary)]/50'
+                      }`}
+                    >
+                      <span>{modifier.name}</span>
+                      {modifier.price > 0 && (
+                        <span className="ml-2 text-xs opacity-60">+{currencySymbol}{modifier.price}</span>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {/* Add to Cart Button */}
-              <button
-                disabled={!canAddToCart()}
-                className="w-full py-4 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  backgroundColor: canAddToCart() ? theme.primaryColor : theme.surfaceColor,
-                  color: canAddToCart() ? '#fff' : theme.textSecondaryColor,
-                }}
-              >
-                {product.currentQuantity <= 0
-                  ? 'Out of Stock'
-                  : `Add to Cart - ${store.currency} ${calculateTotal().toFixed(2)}`}
-              </button>
+            <div className="space-y-4 pt-4 border-t border-[var(--border)]">
+              <div className="flex items-center gap-4">
+                <span className="font-medium">Quantity:</span>
+                <div className="flex items-center gap-2 bg-white/5 rounded-lg p-1">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="p-2 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-medium">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="p-2 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <span className="text-sm opacity-60">
+                  {product.currentQuantity} available
+                </span>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={addingToCart || product.currentQuantity === 0}
+                  className="flex-1 py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  {addingToCart ? 'Adding...' : product.currentQuantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+                </button>
+                <button
+                  onClick={toggleWishlist}
+                  disabled={togglingWishlist}
+                  className={`p-3.5 rounded-xl border transition-colors ${
+                    isInWishlist
+                      ? 'border-red-400 text-red-400 bg-red-400/10'
+                      : 'border-[var(--border)] hover:border-[var(--primary)]'
+                  }`}
+                >
+                  <Heart className={`w-5 h-5 ${isInWishlist ? 'fill-current' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm">
+              {product.currentQuantity > 0 ? (
+                <>
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-green-400">In Stock</span>
+                </>
+              ) : (
+                <span className="text-red-400">Out of Stock</span>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="mt-16 pt-16 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold">Customer Reviews</h2>
+            {isAuthenticated && (
+              <button
+                onClick={() => setShowReviewForm(!showReviewForm)}
+                className="px-4 py-2 rounded-lg font-medium text-sm transition-all hover:opacity-90"
+                style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+              >
+                Write a Review
+              </button>
+            )}
+          </div>
+
+          {showReviewForm && (
+            <ReviewForm
+              productId={product.id}
+              onSubmit={handleReviewSubmitted}
+              onCancel={() => setShowReviewForm(false)}
+            />
+          )}
+
+          {productReviews.length === 0 ? (
+            <div className="text-center py-12 opacity-60">
+              <p>No reviews yet. Be the first to review this product!</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-6">
+              {productReviews.map((review) => (
+                <div key={review.id} className="p-6 rounded-2xl border border-[var(--border)] bg-white/5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-[var(--primary)]/20 flex items-center justify-center">
+                      <span className="font-semibold text-sm" style={{ color: 'var(--primary)' }}>
+                        {review.customer?.name?.charAt(0) || 'U'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium">
+                        {review.customer?.name || 'Anonymous'}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`w-3 h-3 ${
+                              star <= review.rating
+                                ? 'fill-yellow-400 text-yellow-400'
+                                : 'opacity-30'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <h4 className="font-medium mb-2">{review.title}</h4>
+                  <p className="opacity-80 text-sm mb-3">{review.content}</p>
+                  {review.images && review.images.split(',').length > 0 && (
+                    <div className="flex gap-2 mb-3">
+                      {review.images.split(',').map((img: string, idx: number) => (
+                        <img
+                          key={idx}
+                          src={img}
+                          alt={`Review image ${idx + 1}`}
+                          className="w-16 h-16 object-cover rounded-lg"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-4">
+                    {review.isVerified && (
+                      <div className="flex items-center gap-1 text-xs text-green-400">
+                        <Check className="w-3 h-3" />
+                        <span>Verified Purchase</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => markHelpful(review.id)}
+                      disabled={markingHelpful === review.id}
+                      className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
+                    >
+                      <ThumbsUp className={`w-3 h-3 ${markingHelpful === review.id ? 'animate-pulse' : ''}`} />
+                      <span>Helpful ({review.helpfulCount || 0})</span>
+                    </button>
+                  </div>
+                  {review.response && (
+                    <div className="mt-3 p-3 rounded-lg bg-white/5 border-l-2 border-[var(--primary)]">
+                      <p className="text-xs font-medium mb-1">Store Response</p>
+                      <p className="text-sm opacity-80">{review.response}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

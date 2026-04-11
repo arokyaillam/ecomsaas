@@ -18,6 +18,8 @@ export interface StoreHero {
   image?: string | null;
   title?: string;
   subtitle?: string;
+  ctaText?: string;
+  ctaLink?: string;
   enabled?: boolean;
 }
 
@@ -42,11 +44,9 @@ export async function getStoreByDomain(domain: string): Promise<Store | null> {
     console.log('Fetching from URL:', url);
     
     const res = await fetch(url, {
-      cache: 'no-store', // Disable caching for debugging
+      next: { revalidate: 60 }, // Revalidate every 60 seconds
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
       }
     });
     
@@ -79,7 +79,7 @@ export async function getStoreProducts(storeId: string) {
   
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/products`, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
       headers: {
         'Content-Type': 'application/json',
       }
@@ -107,7 +107,7 @@ export async function getStoreCategories(storeId: string) {
   
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/categories`, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
       headers: {
         'Content-Type': 'application/json',
       }
@@ -135,7 +135,7 @@ export async function getStoreSubcategories(storeId: string, categoryId: string)
   
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/categories/${categoryId}/subcategories`, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
       headers: {
         'Content-Type': 'application/json',
       }

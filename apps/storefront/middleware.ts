@@ -5,10 +5,9 @@ export function middleware(request: NextRequest) {
   const host = request.headers.get('host') || '';
   const hostname = host.split(':')[0];
 
-  // Allow query parameter to override domain for testing
-  const url = new URL(request.url);
-  const domainOverride = url.searchParams.get('domain');
-  const finalDomain = domainOverride || hostname;
+  // SECURITY FIX: Removed query parameter override - it allowed any user to access any store
+  // Only use the actual hostname from the request
+  const finalDomain = hostname;
 
   // Store hostname in request headers for server components
   const requestHeaders = new Headers(request.headers);

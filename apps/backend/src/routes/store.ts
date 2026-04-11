@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, stores, products, categories, subcategories, modifierGroups, modifierOptions } from '../db/index.js';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 
 // Public route - no auth required
 export default async function storeRoutes(fastify: FastifyInstance) {
@@ -90,71 +90,115 @@ export default async function storeRoutes(fastify: FastifyInstance) {
   });
 
   // GET Store Products (Public)
+  // FIXED: Single JOIN query instead of N+1 loops + Pagination
   fastify.get('/:storeId/products', {
     config: { rateLimit: publicRateLimit }
   }, async (request, reply) => {
     const { storeId } = request.params as { storeId: string };
+    const { page = '1', limit = '20', categoryId } = request.query as { page?: string; limit?: string; categoryId?: string };
 
     // Security: Validate UUID format
     if (!isValidUUID(storeId)) {
       return reply.status(400).send({ error: 'Invalid store ID format' });
     }
 
-    fastify.log.info(`Fetching products for store: ${storeId}`);
+    // Validate pagination params
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20)); // Max 100 per page
+    const offset = (pageNum - 1) * limitNum;
+
+    fastify.log.info(`Fetching products for store: ${storeId}, page: ${pageNum}, limit: ${limitNum}`);
 
     try {
-      const productsArr = await db.select()
-        .from(products)
-        .where(and(eq(products.storeId, storeId), eq(products.isPublished, true)));
+      // Build where conditions
+      let whereConditions = and(
+        eq(products.storeId, storeId),
+        eq(products.isPublished, true)
+      );
 
-      // Fetch modifiers for each product (with error handling for backwards compatibility)
-      let productsWithModifiers: any[] = productsArr;
-      try {
-        productsWithModifiers = await Promise.all(
-          productsArr.map(async (product) => {
-            try {
-              const groups = await db.select()
-                .from(modifierGroups)
-                .where(
-                  and(
-                    eq(modifierGroups.productId, product.id),
-                    eq(modifierGroups.storeId, storeId)
-                  )
-                )
-                .orderBy(asc(modifierGroups.sortOrder));
-
-              const groupsWithOptions = await Promise.all(
-                groups.map(async (group) => {
-                  try {
-                    const options = await db.select()
-                      .from(modifierOptions)
-                      .where(
-                        and(
-                          eq(modifierOptions.modifierGroupId, group.id),
-                          eq(modifierOptions.isAvailable, true)
-                        )
-                      )
-                      .orderBy(asc(modifierOptions.sortOrder));
-                    return { ...group, options };
-                  } catch (e) {
-                    return { ...group, options: [] };
-                  }
-                })
-              );
-
-              return { ...product, modifierGroups: groupsWithOptions };
-            } catch (e) {
-              return { ...product, modifierGroups: [] };
-            }
-          })
-        );
-      } catch (e) {
-        fastify.log.warn('Modifier tables not ready, returning products without modifiers');
+      if (categoryId && isValidUUID(categoryId)) {
+        whereConditions = and(
+          eq(products.storeId, storeId),
+          eq(products.isPublished, true),
+          eq(products.categoryId, categoryId)
+        ) as any;
       }
 
-      fastify.log.info(`Found ${productsArr.length} products`);
+      // Get total count for pagination
+      const countResult = await db.select({ count: sql<number>`count(*)` })
+        .from(products)
+        .where(whereConditions);
+      const totalCount = Number(countResult[0]?.count || 0);
 
-      return reply.send({ data: productsWithModifiers });
+      // Single query with LEFT JOINs to fetch products with modifiers (paginated)
+      const results = await db.select({
+        product: products,
+        group: modifierGroups,
+        option: modifierOptions,
+      })
+        .from(products)
+        .leftJoin(modifierGroups, eq(modifierGroups.productId, products.id))
+        .leftJoin(modifierOptions, eq(modifierOptions.modifierGroupId, modifierGroups.id))
+        .where(whereConditions)
+        .orderBy(
+          asc(products.sortOrder),
+          asc(modifierGroups.sortOrder),
+          asc(modifierOptions.sortOrder)
+        )
+        .limit(limitNum)
+        .offset(offset);
+
+      // Aggregate results into products with nested modifiers
+      const productMap = new Map<string, any>();
+
+      for (const row of results) {
+        const product = row.product;
+        const group = row.group;
+        const option = row.option;
+
+        if (!productMap.has(product.id)) {
+          productMap.set(product.id, {
+            ...product,
+            modifierGroups: [] as any[],
+            groupMap: new Map<string, any>() // Temporary for grouping
+          });
+        }
+
+        const productData = productMap.get(product.id);
+
+        if (group && !productData.groupMap.has(group.id)) {
+          const groupWithOptions = { ...group, options: [] as any[] };
+          productData.groupMap.set(group.id, groupWithOptions);
+          productData.modifierGroups.push(groupWithOptions);
+        }
+
+        if (group && option && option.isAvailable) {
+          const groupData = productData.groupMap.get(group.id);
+          if (groupData) {
+            groupData.options.push(option);
+          }
+        }
+      }
+
+      // Clean up temporary maps
+      const productsWithModifiers = Array.from(productMap.values()).map(p => {
+        const { groupMap, ...product } = p;
+        return product;
+      });
+
+      fastify.log.info(`Found ${productsWithModifiers.length} products (total: ${totalCount})`);
+
+      return reply.send({
+        data: productsWithModifiers,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limitNum),
+          hasNextPage: pageNum * limitNum < totalCount,
+          hasPrevPage: pageNum > 1
+        }
+      });
     } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });
@@ -162,6 +206,7 @@ export default async function storeRoutes(fastify: FastifyInstance) {
   });
 
   // GET Single Product with Modifiers (Public)
+  // FIXED: Single JOIN query instead of N+1 loops
   fastify.get('/:storeId/products/:productId', {
     config: { rateLimit: publicRateLimit }
   }, async (request, reply) => {
@@ -173,56 +218,50 @@ export default async function storeRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const productArr = await db.select()
+      // Single query with LEFT JOINs
+      const results = await db.select({
+        product: products,
+        group: modifierGroups,
+        option: modifierOptions,
+      })
         .from(products)
-        .where(
-          and(
-            eq(products.id, productId),
-            eq(products.storeId, storeId),
-            eq(products.isPublished, true)
-          )
-        )
-        .limit(1);
+        .leftJoin(modifierGroups, eq(modifierGroups.productId, products.id))
+        .leftJoin(modifierOptions, eq(modifierOptions.modifierGroupId, modifierGroups.id))
+        .where(and(
+          eq(products.id, productId),
+          eq(products.storeId, storeId),
+          eq(products.isPublished, true)
+        ))
+        .orderBy(
+          asc(modifierGroups.sortOrder),
+          asc(modifierOptions.sortOrder)
+        );
 
-      if (productArr.length === 0) {
+      if (results.length === 0) {
         return reply.status(404).send({ error: 'Product not found' });
       }
 
-      const product = productArr[0];
+      // Aggregate into product with nested modifiers
+      const product = results[0].product;
+      const groupMap = new Map<string, any>();
+      const groupsWithOptions: any[] = [];
 
-      // Fetch modifier groups with options (with error handling for backwards compatibility)
-      let groupsWithOptions: any[] = [];
-      try {
-        const groups = await db.select()
-          .from(modifierGroups)
-          .where(
-            and(
-              eq(modifierGroups.productId, productId),
-              eq(modifierGroups.storeId, storeId)
-            )
-          )
-          .orderBy(asc(modifierGroups.sortOrder));
+      for (const row of results) {
+        const group = row.group;
+        const option = row.option;
 
-        groupsWithOptions = await Promise.all(
-          groups.map(async (group) => {
-            try {
-              const options = await db.select()
-                .from(modifierOptions)
-                .where(
-                  and(
-                    eq(modifierOptions.modifierGroupId, group.id),
-                    eq(modifierOptions.isAvailable, true)
-                  )
-                )
-                .orderBy(asc(modifierOptions.sortOrder));
-              return { ...group, options };
-            } catch (e) {
-              return { ...group, options: [] };
-            }
-          })
-        );
-      } catch (e) {
-        fastify.log.warn('Modifier tables not ready, returning product without modifiers');
+        if (group && !groupMap.has(group.id)) {
+          const groupWithOptions = { ...group, options: [] as any[] };
+          groupMap.set(group.id, groupWithOptions);
+          groupsWithOptions.push(groupWithOptions);
+        }
+
+        if (group && option && option.isAvailable) {
+          const groupData = groupMap.get(group.id);
+          if (groupData) {
+            groupData.options.push(option);
+          }
+        }
       }
 
       return reply.send({
@@ -238,26 +277,51 @@ export default async function storeRoutes(fastify: FastifyInstance) {
   });
 
   // GET Store Categories (Public)
+  // FIXED: Added pagination
   fastify.get('/:storeId/categories', {
     config: { rateLimit: publicRateLimit }
   }, async (request, reply) => {
     const { storeId } = request.params as { storeId: string };
+    const { page = '1', limit = '50' } = request.query as { page?: string; limit?: string };
 
     // Security: Validate UUID format
     if (!isValidUUID(storeId)) {
       return reply.status(400).send({ error: 'Invalid store ID format' });
     }
-    
+
+    // Validate pagination params
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50));
+    const offset = (pageNum - 1) * limitNum;
+
     fastify.log.info(`Fetching categories for store: ${storeId}`);
-    
+
     try {
-      const categoriesArr = await db.select()
+      // Get total count
+      const countResult = await db.select({ count: sql<number>`count(*)` })
         .from(categories)
         .where(eq(categories.storeId, storeId));
-      
-      fastify.log.info(`Found ${categoriesArr.length} categories`);
-      
-      return reply.send({ data: categoriesArr });
+      const totalCount = Number(countResult[0]?.count || 0);
+
+      const categoriesArr = await db.select()
+        .from(categories)
+        .where(eq(categories.storeId, storeId))
+        .limit(limitNum)
+        .offset(offset);
+
+      fastify.log.info(`Found ${categoriesArr.length} categories (total: ${totalCount})`);
+
+      return reply.send({
+        data: categoriesArr,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limitNum),
+          hasNextPage: pageNum * limitNum < totalCount,
+          hasPrevPage: pageNum > 1
+        }
+      });
     } catch (error: any) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

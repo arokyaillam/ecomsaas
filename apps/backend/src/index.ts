@@ -7,6 +7,7 @@ import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import multipart from '@fastify/multipart';
 import staticPlugin from '@fastify/static';
+import cookie from '@fastify/cookie';
 import bcrypt from 'bcrypt';
 import { db, users, stores } from './db/index.js';
 import { eq } from 'drizzle-orm';
@@ -16,19 +17,32 @@ import categoryRoutes from './routes/categories.js';
 import storeRoutes from './routes/store.js';
 import uploadRoutes from './routes/upload.js';
 import modifierRoutes from './routes/modifiers.js';
+import cartRoutes from './routes/cart.js';
+import checkoutRoutes from './routes/checkout.js';
+import orderRoutes from './routes/orders.js';
+import customerRoutes from './routes/customers.js';
+import reviewRoutes from './routes/reviews.js';
+import couponRoutes from './routes/coupons.js';
+import wishlistRoutes from './routes/wishlist.js';
+import analyticsRoutes from './routes/analytics.js';
+import superAdminRoutes from './routes/super-admin.js';
 
 // Type declarations for JWT
 declare module '@fastify/jwt' {
   interface FastifyJWT {
     payload: {
-      userId: string;
+      userId?: string;
+      customerId?: string;
       storeId: string;
-      role: string;
+      role?: string;
+      email?: string;
     };
     user: {
-      userId: string;
+      userId?: string;
+      customerId?: string;
       storeId: string;
-      role: string;
+      role?: string;
+      email?: string;
     };
   }
 }
@@ -36,9 +50,11 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyRequest {
     user: {
-      userId: string;
+      userId?: string;
+      customerId?: string;
       storeId: string;
-      role: string;
+      role?: string;
+      email?: string;
     };
   }
 }
@@ -71,10 +87,16 @@ await fastify.register(rateLimit, {
 await fastify.register(cors, {
   origin: process.env.NODE_ENV === 'production'
     ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://admin.ecomsaas.com']
-    : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
   strictPreflight: false
+});
+
+// Cookie support for cart sessions
+await fastify.register(cookie, {
+  secret: process.env.COOKIE_SECRET || 'my-secret-cookie-key-change-in-production',
+  parseOptions: {}
 });
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -565,6 +587,15 @@ await fastify.register(categoryRoutes, { prefix: '/api/categories' });
 await fastify.register(storeRoutes, { prefix: '/api/store' });
 await fastify.register(uploadRoutes, { prefix: '/api/upload' });
 await fastify.register(modifierRoutes, { prefix: '/api/modifiers' });
+await fastify.register(cartRoutes, { prefix: '/api/cart' });
+await fastify.register(checkoutRoutes, { prefix: '/api/checkout' });
+await fastify.register(orderRoutes, { prefix: '/api/orders' });
+await fastify.register(customerRoutes, { prefix: '/api/customers' });
+await fastify.register(reviewRoutes, { prefix: '/api/reviews' });
+await fastify.register(couponRoutes, { prefix: '/api/coupons' });
+await fastify.register(wishlistRoutes, { prefix: '/api/wishlist' });
+await fastify.register(analyticsRoutes, { prefix: '/api/analytics' });
+await fastify.register(superAdminRoutes, { prefix: '/api/super-admin' });
 
 // Start the server
 try {

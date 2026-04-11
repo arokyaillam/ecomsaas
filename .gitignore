@@ -77,3 +77,13 @@ $RECYCLE.BIN/
 *.tmp
 *.temp
 *~
+
+# Claude Code
+.claude/skills/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Stray app copies inside backend
+apps/backend/apps/
+.claude/settings.local.json

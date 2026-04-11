@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { getStoreByDomain } from "@/lib/store";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -9,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const headersList = await headers();
     const domain = headersList.get('x-store-domain') || 'localhost';
     const store = await getStoreByDomain(domain);
-    
+
     return {
       title: store?.name || "EcomSaaS Storefront",
       description: "Modern e-commerce storefront",
@@ -29,7 +30,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let store = null;
-  
+
   try {
     const headersList = await headers();
     const domain = headersList.get('x-store-domain') || 'localhost';
@@ -37,7 +38,7 @@ export default async function RootLayout({
   } catch (error) {
     console.error('Failed to load store in layout:', error);
   }
-  
+
   // Default theme if no store found
   const defaultTheme = {
     primaryColor: "#0ea5e9",
@@ -55,10 +56,12 @@ export default async function RootLayout({
   };
 
   const theme = store?.theme || defaultTheme;
-  
+
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://api.fontshare.com" crossOrigin="anonymous" />
+        <link href="https://api.fontshare.com/v2/css?f[]=space-mono@400,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -75,17 +78,28 @@ export default async function RootLayout({
             --radius: ${theme.borderRadius};
             --font-family: ${theme.fontFamily};
           }
-          
+
           body {
             background-color: var(--background);
             color: var(--text);
             font-family: var(--font-family), system-ui, sans-serif;
           }
+
+          @keyframes slide-in-right {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+          }
+
+          .animate-slide-in-right {
+            animation: slide-in-right 0.3s ease-out;
+          }
         `}</style>
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider theme={theme}>
-          {children}
+          <Providers storeId={store?.id}>
+            {children}
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

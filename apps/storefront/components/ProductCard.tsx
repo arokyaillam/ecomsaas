@@ -2,142 +2,132 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { ShoppingBag } from 'lucide-react';
+import { useState } from 'react';
 
 interface ProductCardProps {
   product: any;
-  theme: any;
-  currency: string;
+  theme?: any;
+  currency?: string;
+  store?: any;
 }
 
-export function ProductCard({ product, theme, currency }: ProductCardProps) {
-  // Handle base64 images - if images contains data: URL, ignore it (backwards compatibility)
-  const hasBase64Image = product.images?.includes('data:');
-  const imageUrl = hasBase64Image ? null : product.images?.split(',')[0];
-  const hasDiscount = product.discount > 0;
+export function ProductCard({ product, theme, currency, store }: ProductCardProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // Support both old and new props
+  const storeCurrency = currency || store?.currency || 'USD';
+  const imageUrl = product.images?.split(',')[0];
+  const hasDiscount = Number(product.discount) > 0;
+  const isOutOfStock = product.currentQuantity <= 0;
+  const isLowStock = product.currentQuantity > 0 && product.currentQuantity <= 5;
+
+  const formatPrice = (price: string | number) => {
+    const num = typeof price === 'string' ? parseFloat(price) : price;
+    return num?.toFixed(2) || '0.00';
+  };
 
   return (
     <div
-      className="group relative card-editorial rounded-2xl overflow-hidden"
-      style={{
-        backgroundColor: theme.surfaceColor,
-        border: `1px solid ${theme.borderColor}`,
-      }}
+      className="group relative"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Image Container */}
-      <Link href={`/product/${product.id}`} className="block relative aspect-[4/5] overflow-hidden">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={product.titleEn}
-            fill
-            className="object-cover image-editorial"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-          />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center"
-            style={{ backgroundColor: theme.backgroundColor }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="40"
-              height="40"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={theme.textSecondaryColor}
-              strokeWidth="1"
+      {/* Brutalist Frame */}
+      <div className="relative border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)] transition-all duration-300 hover:translate-y-[-8px] hover:shadow-[8px_8px_0_var(--text-primary)]">
+        {/* Image Container */}
+        <Link href={`/product/${product.id}`} className="block relative aspect-[4/5] overflow-hidden bg-[var(--bg-tertiary)]">
+          {imageUrl && !imageError ? (
+            <Image
+              src={imageUrl}
+              alt={product.titleEn}
+              fill
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="font-mono text-6xl font-bold text-[var(--text-muted)] opacity-30">
+                ?
+              </span>
+            </div>
+          )}
+
+          {/* Gradient Overlay on Hover */}
+          <div className={`absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-transparent to-transparent transition-opacity duration-300 ${isHovered ? 'opacity-60' : 'opacity-0'}`} />
+
+          {/* Discount Badge */}
+          {hasDiscount && (
+            <div className="absolute top-4 left-4 bg-[var(--accent)] text-[var(--bg-primary)] px-3 py-1 font-mono text-xs font-bold uppercase tracking-wider">
+              -{product.discount}{product.discountType === 'Percent' ? '%' : ` ${storeCurrency}`}
+            </div>
+          )}
+
+          {/* Stock Status Badge */}
+          {isOutOfStock && (
+            <div className="absolute top-4 right-4 bg-[var(--text-muted)] text-[var(--text-primary)] px-3 py-1 font-mono text-xs font-bold uppercase">
+              SOLD OUT
+            </div>
+          )}
+          {isLowStock && (
+            <div className="absolute top-4 right-4 bg-[var(--accent)] text-[var(--bg-primary)] px-3 py-1 font-mono text-xs font-bold uppercase">
+              LOW STOCK
+            </div>
+          )}
+
+          {/* Quick Add Button */}
+          <div className={`absolute bottom-0 left-0 right-0 p-4 transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+            <button
+              className="w-full btn-brutalist text-sm py-3"
+              disabled={isOutOfStock}
+              onClick={(e) => {
+                e.preventDefault();
+                // Quick add functionality
+              }}
             >
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <circle cx="9" cy="9" r="2" />
-              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-            </svg>
+              <ShoppingBag className="w-4 h-4" />
+              {isOutOfStock ? 'OUT OF STOCK' : 'ADD TO CART'}
+            </button>
           </div>
-        )}
-
-        {/* Discount Badge */}
-        {hasDiscount && (
-          <div
-            className="absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-semibold text-white animate-fade-in"
-            style={{ backgroundColor: theme.accentColor }}
-          >
-            -{product.discount}{product.discountType === 'Percent' ? '%' : ` ${currency}`}
-          </div>
-        )}
-
-        {/* Quick Actions Overlay */}
-        <div
-          className="absolute inset-x-4 bottom-4 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 flex gap-2"
-        >
-          <button
-            className="flex-1 py-3 text-sm font-medium text-white rounded-xl shadow-lg backdrop-blur-sm"
-            style={{ backgroundColor: `${theme.primaryColor}ee` }}
-          >
-            Quick View
-          </button>
-        </div>
-      </Link>
-
-      {/* Content */}
-      <div className="p-5">
-        {/* Category Tag */}
-        {product.categoryName && (
-          <p
-            className="text-xs uppercase tracking-wider mb-2"
-            style={{ color: theme.textSecondaryColor }}
-          >
-            {product.categoryName}
-          </p>
-        )}
-
-        {/* Title */}
-        <Link href={`/product/${product.id}`}>
-          <h3
-            className="font-display text-xl leading-tight mb-2 line-reveal line-clamp-2"
-            style={{ color: theme.textColor }}
-          >
-            {product.titleEn}
-          </h3>
         </Link>
 
-        {/* Arabic Title */}
-        {product.titleAr && (
-          <p
-            className="text-sm mb-3 line-clamp-1"
-            style={{ color: theme.textSecondaryColor }}
-            dir="rtl"
-          >
-            {product.titleAr}
-          </p>
-        )}
-
-        {/* Price Section */}
-        <div className="flex items-baseline gap-3 mt-3">
-          <span
-            className="font-display text-2xl font-semibold"
-            style={{ color: theme.primaryColor }}
-          >
-            {currency} {product.salePrice}
-          </span>
-          {hasDiscount && product.price !== product.salePrice && (
-            <span
-              className="text-sm line-through"
-              style={{ color: theme.textSecondaryColor }}
-            >
-              {currency} {product.price}
+        {/* Content */}
+        <div className="p-5 border-t-4 border-[var(--text-primary)]">
+          {/* Category Tag */}
+          {product.categoryName && (
+            <span className="text-caption text-[var(--accent)] mb-2 block">
+              {product.categoryName}
             </span>
           )}
-        </div>
 
-        {/* Stock Status */}
-        {product.currentQuantity <= 0 ? (
-          <p className="mt-3 text-xs font-medium" style={{ color: theme.textSecondaryColor }}>
-            Out of Stock
-          </p>
-        ) : product.currentQuantity <= 5 ? (
-          <p className="mt-3 text-xs font-medium" style={{ color: theme.accentColor }}>
-            Only {product.currentQuantity} left
-          </p>
-        ) : null}
+          {/* Title */}
+          <Link href={`/product/${product.id}`}>
+            <h3 className="font-mono text-lg font-bold text-[var(--text-primary)] leading-tight mb-2 line-clamp-2 hover:text-[var(--accent)] transition-colors">
+              {product.titleEn}
+            </h3>
+          </Link>
+
+          {/* Arabic Title */}
+          {product.titleAr && (
+            <p className="text-sm text-[var(--text-secondary)] mb-3 line-clamp-1" dir="rtl">
+              {product.titleAr}
+            </p>
+          )}
+
+          {/* Price Section */}
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-2xl font-bold text-[var(--text-primary)]">
+              {storeCurrency} {formatPrice(product.salePrice)}
+            </span>
+            {hasDiscount && (
+              <span className="font-mono text-sm text-[var(--text-muted)] line-through">
+                {storeCurrency} {formatPrice(product.price || product.salePrice)}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

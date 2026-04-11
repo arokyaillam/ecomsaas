@@ -1,7 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, createContext, useContext } from 'react';
 import { StoreTheme, getStoreByDomain } from '@/lib/store';
+
+// Store type definition
+export interface Store {
+  id: string;
+  name: string;
+  domain: string;
+  currency: string;
+  language: string;
+  theme: StoreTheme;
+  hero: {
+    image?: string | null;
+    title?: string;
+    subtitle?: string;
+    enabled?: boolean;
+  };
+}
 
 interface ThemeProviderProps {
   theme: StoreTheme;
@@ -23,8 +39,16 @@ const defaultTheme: StoreTheme = {
   faviconUrl: null,
 };
 
+// Store context
+const StoreContext = createContext<Store | null>(null);
+
+export function useStore() {
+  return useContext(StoreContext);
+}
+
 export function ThemeProvider({ theme: initialTheme, children }: ThemeProviderProps) {
   const [theme, setTheme] = useState<StoreTheme>(initialTheme || defaultTheme);
+  const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,9 +56,10 @@ export function ThemeProvider({ theme: initialTheme, children }: ThemeProviderPr
     async function loadTheme() {
       try {
         const domain = window.location.hostname;
-        const store = await getStoreByDomain(domain);
-        if (store?.theme) {
-          setTheme(store.theme);
+        const fetchedStore = await getStoreByDomain(domain);
+        if (fetchedStore?.theme) {
+          setTheme(fetchedStore.theme);
+          setStore(fetchedStore);
         }
       } catch (error) {
         console.error('Failed to load theme:', error);
@@ -58,7 +83,7 @@ export function ThemeProvider({ theme: initialTheme, children }: ThemeProviderPr
     root.style.setProperty('--border', theme.borderColor);
     root.style.setProperty('--radius', theme.borderRadius);
     root.style.setProperty('--font-family', theme.fontFamily);
-    
+
     // Apply body styles
     document.body.style.backgroundColor = theme.backgroundColor;
     document.body.style.color = theme.textColor;
@@ -75,5 +100,9 @@ export function ThemeProvider({ theme: initialTheme, children }: ThemeProviderPr
     );
   }
 
-  return <>{children}</>;
+  return (
+    <StoreContext.Provider value={store}>
+      {children}
+    </StoreContext.Provider>
+  );
 }
