@@ -15,7 +15,8 @@ interface ProductDetailProps {
   modifiers: any[];
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URL for client-side (proxied via Next.js rewrites)
+const API_URL = '';
 
 export function ProductDetail({ product, store, reviews, modifiers }: ProductDetailProps) {
   const { addToCart } = useCart();

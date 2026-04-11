@@ -7,12 +7,14 @@ import { ProductDetail } from '@/components/ProductDetail';
 import { ProductSchema } from '@/components/StructuredData';
 import { generateProductMetadata } from '@/lib/seo';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = typeof window === 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+  : '';
 
 async function getProduct(storeId: string, productId: string) {
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/products/${productId}`, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
     });
 
     if (!res.ok) return null;
@@ -27,7 +29,7 @@ async function getProduct(storeId: string, productId: string) {
 async function getProductReviews(productId: string) {
   try {
     const res = await fetch(`${API_URL}/api/reviews/product/${productId}`, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
     });
 
     if (!res.ok) return [];

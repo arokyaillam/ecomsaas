@@ -141,12 +141,15 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         .limit(Number(limit))
         .offset(offset);
 
-      // Get customer names
+      // Get customer names (excluding password hash)
       const ordersWithCustomers = await Promise.all(
         ordersList.map(async (order) => {
           let customerName = 'Guest';
           if (order.customerId) {
-            const customer = await db.select()
+            const customer = await db.select({
+              firstName: customers.firstName,
+              lastName: customers.lastName,
+            })
               .from(customers)
               .where(eq(customers.id, order.customerId))
               .limit(1);
@@ -191,12 +194,15 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         .orderBy(desc(orders.createdAt))
         .limit(Number(limit));
 
-      // Get customer names
+      // Get customer names (excluding password hash)
       const ordersWithCustomers = await Promise.all(
         recentOrders.map(async (order) => {
           let customerName = 'Guest';
           if (order.customerId) {
-            const customer = await db.select()
+            const customer = await db.select({
+              firstName: customers.firstName,
+              lastName: customers.lastName,
+            })
               .from(customers)
               .where(eq(customers.id, order.customerId))
               .limit(1);
@@ -245,10 +251,21 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId));
 
-      // Get customer info
+      // Get customer info (excluding password hash)
       let customer = null;
       if (orderArr[0].customerId) {
-        const customerArr = await db.select()
+        const customerArr = await db.select({
+          id: customers.id,
+          email: customers.email,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          phone: customers.phone,
+          avatarUrl: customers.avatarUrl,
+          isVerified: customers.isVerified,
+          storeId: customers.storeId,
+          lastLoginAt: customers.lastLoginAt,
+          createdAt: customers.createdAt,
+        })
           .from(customers)
           .where(eq(customers.id, orderArr[0].customerId))
           .limit(1);

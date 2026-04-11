@@ -203,7 +203,7 @@ fastify.post('/api/auth/register', {
   domain = sanitizeInput(domain).toLowerCase().replace(/[^a-z0-9-]/g, '');
 
   try {
-    const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const existingUser = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existingUser.length > 0) {
       return reply.status(400).send({ error: 'Email already exists' });
     }
@@ -418,9 +418,31 @@ fastify.put('/api/store/theme', {
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId))
-      .returning();
-    
-    return reply.send({ 
+      .returning({
+        id: stores.id,
+        name: stores.name,
+        domain: stores.domain,
+        primaryColor: stores.primaryColor,
+        secondaryColor: stores.secondaryColor,
+        accentColor: stores.accentColor,
+        backgroundColor: stores.backgroundColor,
+        surfaceColor: stores.surfaceColor,
+        textColor: stores.textColor,
+        textSecondaryColor: stores.textSecondaryColor,
+        borderColor: stores.borderColor,
+        borderRadius: stores.borderRadius,
+        fontFamily: stores.fontFamily,
+        logoUrl: stores.logoUrl,
+        faviconUrl: stores.faviconUrl,
+        heroImage: stores.heroImage,
+        heroTitle: stores.heroTitle,
+        heroSubtitle: stores.heroSubtitle,
+        heroCtaText: stores.heroCtaText,
+        heroCtaLink: stores.heroCtaLink,
+        heroEnabled: stores.heroEnabled,
+      });
+
+    return reply.send({
       message: 'Theme updated successfully',
       data: updatedStore[0]
     });
@@ -509,7 +531,17 @@ fastify.put('/api/store/hero', {
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId))
-      .returning();
+      .returning({
+        id: stores.id,
+        name: stores.name,
+        domain: stores.domain,
+        heroImage: stores.heroImage,
+        heroTitle: stores.heroTitle,
+        heroSubtitle: stores.heroSubtitle,
+        heroCtaText: stores.heroCtaText,
+        heroCtaLink: stores.heroCtaLink,
+        heroEnabled: stores.heroEnabled,
+      });
 
     return reply.send({
       message: 'Hero section updated successfully',

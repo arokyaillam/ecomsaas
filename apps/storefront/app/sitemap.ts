@@ -2,12 +2,14 @@ import { MetadataRoute } from 'next';
 import { headers } from 'next/headers';
 import { getStoreByDomain } from '@/lib/store';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = typeof window === 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+  : '';
 
 async function getStoreProducts(storeId: string) {
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/products`, {
-      cache: 'no-store',
+      next: { revalidate: 3600 },
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -20,7 +22,7 @@ async function getStoreProducts(storeId: string) {
 async function getStoreCategories(storeId: string) {
   try {
     const res = await fetch(`${API_URL}/api/store/${storeId}/categories`, {
-      cache: 'no-store',
+      next: { revalidate: 3600 },
     });
     if (!res.ok) return [];
     const data = await res.json();

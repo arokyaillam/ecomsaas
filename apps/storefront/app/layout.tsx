@@ -60,13 +60,22 @@ export default async function RootLayout({
   // Sanitize theme values to prevent CSS injection
   const sanitizeCssValue = (value: string | null | undefined, fallback: string): string => {
     if (!value) return fallback;
-    // Only allow safe CSS values: hex colors, rgba/hsla functions, and simple values
     const str = value.trim();
     if (/^#[0-9a-fA-F]{3,8}$/.test(str)) return str;
     if (/^(rgba?\(|hsla?\()\s*[\d\s,.%]+\)$/.test(str)) return str;
     if (/^\d+(\.\d+)?(px|rem|em|%)$/.test(str)) return str;
-    if (/^[a-zA-Z0-9\s,'"-]+$/.test(str) && !/[;{}]/.test(str)) return str;
+    // Font family names: no parentheses (blocks url()/expression()), no semicolons/braces
+    if (/^[a-zA-Z0-9\s,'"\-]+$/.test(str) && !/[;{}()]/.test(str)) return str;
     return fallback;
+  };
+
+  // Sanitize URL values to prevent javascript:/data: URI injection
+  const sanitizeUrl = (value: string | null | undefined): string | null => {
+    if (!value) return null;
+    const str = value.trim();
+    if (/^https?:\/\//i.test(str)) return str;
+    if (/^\/[^/]/.test(str)) return str; // relative paths
+    return null;
   };
 
   const safeTheme = {
@@ -80,8 +89,8 @@ export default async function RootLayout({
     borderColor: sanitizeCssValue(theme.borderColor, defaultTheme.borderColor),
     borderRadius: sanitizeCssValue(theme.borderRadius, defaultTheme.borderRadius),
     fontFamily: sanitizeCssValue(theme.fontFamily, defaultTheme.fontFamily),
-    logoUrl: theme.logoUrl,
-    faviconUrl: theme.faviconUrl,
+    logoUrl: sanitizeUrl(theme.logoUrl),
+    faviconUrl: sanitizeUrl(theme.faviconUrl),
   };
 
   return (

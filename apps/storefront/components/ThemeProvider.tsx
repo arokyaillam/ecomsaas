@@ -39,6 +39,21 @@ const defaultTheme: StoreTheme = {
   faviconUrl: null,
 };
 
+// Sanitize CSS values to prevent injection attacks
+function sanitizeCssValue(value: string | null | undefined, fallback: string): string {
+  if (!value) return fallback;
+  const str = value.trim();
+  // Hex colors
+  if (/^#[0-9a-fA-F]{3,8}$/.test(str)) return str;
+  // rgba/hsla functions with numeric params only
+  if (/^(rgba?\(|hsla?\()\s*[\d\s,.%]+\)$/.test(str)) return str;
+  // Numeric values with units
+  if (/^\d+(\.\d+)?(px|rem|em|%)$/.test(str)) return str;
+  // Font family names: alphanumeric, spaces, hyphens, commas, quotes — no parens or semicolons
+  if (/^[a-zA-Z0-9\s,'"\-]+$/.test(str) && !/[;{}()]/.test(str)) return str;
+  return fallback;
+}
+
 // Store context
 const StoreContext = createContext<Store | null>(null);
 
@@ -71,22 +86,22 @@ export function ThemeProvider({ theme: initialTheme, children }: ThemeProviderPr
   }, []);
 
   useEffect(() => {
-    // Apply CSS variables to document
+    // Apply CSS variables to document (sanitized)
     const root = document.documentElement;
-    root.style.setProperty('--primary', theme.primaryColor);
-    root.style.setProperty('--secondary', theme.secondaryColor);
-    root.style.setProperty('--accent', theme.accentColor);
-    root.style.setProperty('--background', theme.backgroundColor);
-    root.style.setProperty('--surface', theme.surfaceColor);
-    root.style.setProperty('--text', theme.textColor);
-    root.style.setProperty('--text-secondary', theme.textSecondaryColor);
-    root.style.setProperty('--border', theme.borderColor);
-    root.style.setProperty('--radius', theme.borderRadius);
-    root.style.setProperty('--font-family', theme.fontFamily);
+    root.style.setProperty('--primary', sanitizeCssValue(theme.primaryColor, defaultTheme.primaryColor));
+    root.style.setProperty('--secondary', sanitizeCssValue(theme.secondaryColor, defaultTheme.secondaryColor));
+    root.style.setProperty('--accent', sanitizeCssValue(theme.accentColor, defaultTheme.accentColor));
+    root.style.setProperty('--background', sanitizeCssValue(theme.backgroundColor, defaultTheme.backgroundColor));
+    root.style.setProperty('--surface', sanitizeCssValue(theme.surfaceColor, defaultTheme.surfaceColor));
+    root.style.setProperty('--text', sanitizeCssValue(theme.textColor, defaultTheme.textColor));
+    root.style.setProperty('--text-secondary', sanitizeCssValue(theme.textSecondaryColor, defaultTheme.textSecondaryColor));
+    root.style.setProperty('--border', sanitizeCssValue(theme.borderColor, defaultTheme.borderColor));
+    root.style.setProperty('--radius', sanitizeCssValue(theme.borderRadius, defaultTheme.borderRadius));
+    root.style.setProperty('--font-family', sanitizeCssValue(theme.fontFamily, defaultTheme.fontFamily));
 
-    // Apply body styles
-    document.body.style.backgroundColor = theme.backgroundColor;
-    document.body.style.color = theme.textColor;
+    // Apply body styles (sanitized)
+    document.body.style.backgroundColor = sanitizeCssValue(theme.backgroundColor, defaultTheme.backgroundColor);
+    document.body.style.color = sanitizeCssValue(theme.textColor, defaultTheme.textColor);
   }, [theme]);
 
   if (loading && !theme) {

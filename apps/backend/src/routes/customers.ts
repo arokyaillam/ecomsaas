@@ -65,7 +65,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
     try {
       // Check if email exists
-      const existing = await db.select()
+      const existing = await db.select({ id: customers.id })
         .from(customers)
         .where(and(
           eq(customers.storeId, storeId),
@@ -89,7 +89,16 @@ export default async function customerRoutes(fastify: FastifyInstance) {
         lastName,
         phone,
         isVerified: false,
-      }).returning();
+      }).returning({
+        id: customers.id,
+        email: customers.email,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        phone: customers.phone,
+        storeId: customers.storeId,
+        isVerified: customers.isVerified,
+        createdAt: customers.createdAt,
+      });
 
       const customer = newCustomer[0];
 

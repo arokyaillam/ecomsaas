@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URL to leverage Next.js API proxy (avoids CORS issues)
+const API_URL = '';
 
 interface CartItem {
   id: string;

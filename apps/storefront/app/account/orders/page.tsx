@@ -7,7 +7,8 @@ import { Package, ChevronRight, Truck, CheckCircle, Clock, XCircle } from 'lucid
 import Link from 'next/link';
 import Image from 'next/image';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URL for client-side (proxied via Next.js rewrites)
+const API_URL = '';
 
 interface Order {
   id: string;

@@ -33,7 +33,10 @@ export interface Store {
   hero: StoreHero;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Server-side fetches need absolute URL; client-side uses Next.js rewrites proxy
+const API_URL = typeof window === 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+  : '';
 
 export async function getStoreByDomain(domain: string): Promise<Store | null> {
   console.log('Fetching store for domain:', domain);
@@ -154,20 +157,45 @@ export async function getStoreSubcategories(storeId: string, categoryId: string)
   }
 }
 
-// Generate CSS variables from theme
+// Sanitize CSS values to prevent injection attacks
+function sanitizeCssValue(value: string | null | undefined, fallback: string): string {
+  if (!value) return fallback;
+  const str = value.trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(str)) return str;
+  if (/^(rgba?\(|hsla?\()\s*[\d\s,.%]+\)$/.test(str)) return str;
+  if (/^\d+(\.\d+)?(px|rem|em|%)$/.test(str)) return str;
+  if (/^[a-zA-Z0-9\s,'"\-]+$/.test(str) && !/[;{}()]/.test(str)) return str;
+  return fallback;
+}
+
+const defaultThemeValues: Record<string, string> = {
+  primaryColor: '#0ea5e9',
+  secondaryColor: '#6366f1',
+  accentColor: '#8b5cf6',
+  backgroundColor: '#0f172a',
+  surfaceColor: '#1e293b',
+  textColor: '#f8fafc',
+  textSecondaryColor: '#94a3b8',
+  borderColor: 'rgba(255,255,255,0.1)',
+  borderRadius: '12px',
+  fontFamily: 'Inter, sans-serif',
+};
+
+// Generate CSS variables from theme (sanitized)
 export function generateThemeCSS(theme: StoreTheme): string {
+  const s = (key: string, value: string | null | undefined, fallback: string) => sanitizeCssValue(value, fallback);
   return `
     :root {
-      --primary: ${theme.primaryColor};
-      --secondary: ${theme.secondaryColor};
-      --accent: ${theme.accentColor};
-      --background: ${theme.backgroundColor};
-      --surface: ${theme.surfaceColor};
-      --text: ${theme.textColor};
-      --text-secondary: ${theme.textSecondaryColor};
-      --border: ${theme.borderColor};
-      --radius: ${theme.borderRadius};
-      --font-family: ${theme.fontFamily};
+      --primary: ${s('primaryColor', theme.primaryColor, defaultThemeValues.primaryColor)};
+      --secondary: ${s('secondaryColor', theme.secondaryColor, defaultThemeValues.secondaryColor)};
+      --accent: ${s('accentColor', theme.accentColor, defaultThemeValues.accentColor)};
+      --background: ${s('backgroundColor', theme.backgroundColor, defaultThemeValues.backgroundColor)};
+      --surface: ${s('surfaceColor', theme.surfaceColor, defaultThemeValues.surfaceColor)};
+      --text: ${s('textColor', theme.textColor, defaultThemeValues.textColor)};
+      --text-secondary: ${s('textSecondaryColor', theme.textSecondaryColor, defaultThemeValues.textSecondaryColor)};
+      --border: ${s('borderColor', theme.borderColor, defaultThemeValues.borderColor)};
+      --radius: ${s('borderRadius', theme.borderRadius, defaultThemeValues.borderRadius)};
+      --font-family: ${s('fontFamily', theme.fontFamily, defaultThemeValues.fontFamily)};
     }
   `;
 }

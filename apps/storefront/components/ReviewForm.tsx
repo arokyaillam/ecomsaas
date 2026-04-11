@@ -26,7 +26,8 @@ export function ReviewForm({ productId, onSubmit, onCancel }: ReviewFormProps) {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  // Use relative URL for client-side (proxied via Next.js rewrites)
+  const API_URL = '';
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

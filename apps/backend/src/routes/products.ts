@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, products, categories, subcategories, modifierGroups, modifierOptions, productVariants, productVariantOptions, productVariantCombinations } from '../db/index.js';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 const productSchema = z.object({
@@ -43,9 +43,11 @@ export default async function productRoutes(fastify: FastifyInstance) {
   // 1. GET ALL PRODUCTS
   fastify.get('/', async (request, reply) => {
     const { storeId } = request.user as { storeId: string; userId: string; role: string };
-    
+
     try {
-      const allProducts = await db.select().from(products).where(eq(products.storeId, storeId));
+      const allProducts = await db.select().from(products)
+        .where(eq(products.storeId, storeId))
+        .orderBy(asc(products.sortOrder), asc(products.createdAt));
       return reply.send({ data: allProducts });
     } catch (error: any) {
       fastify.log.error(error);
@@ -72,104 +74,86 @@ export default async function productRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Product not found' });
       }
 
-      // Fetch modifier groups with options (product-specific and category-level)
-      let groupsWithOptions: any[] = [];
-      try {
+      const product = productArr[0];
+
+      // Run independent queries in parallel instead of N+1
+      const [productGroups, categoryGroups, variants, variantCombinations] = await Promise.all([
         // Get product-specific modifiers
-        const productGroups = await db.select()
-          .from(modifierGroups)
-          .where(
-            and(
-              eq(modifierGroups.productId, id),
-              eq(modifierGroups.storeId, storeId),
-              eq(modifierGroups.applyTo, 'product')
-            )
-          )
-          .orderBy(asc(modifierGroups.sortOrder));
+        db.select().from(modifierGroups)
+          .where(and(eq(modifierGroups.productId, id), eq(modifierGroups.storeId, storeId), eq(modifierGroups.applyTo, 'product')))
+          .orderBy(asc(modifierGroups.sortOrder))
+          .catch(() => []),
 
         // Get category-level modifiers
-        const categoryGroups = await db.select()
-          .from(modifierGroups)
-          .where(
-            and(
-              eq(modifierGroups.categoryId, productArr[0].categoryId),
-              eq(modifierGroups.storeId, storeId),
-              eq(modifierGroups.applyTo, 'category')
-            )
-          )
-          .orderBy(asc(modifierGroups.sortOrder));
+        db.select().from(modifierGroups)
+          .where(and(eq(modifierGroups.categoryId, product.categoryId), eq(modifierGroups.storeId, storeId), eq(modifierGroups.applyTo, 'category')))
+          .orderBy(asc(modifierGroups.sortOrder))
+          .catch(() => []),
 
-        const allGroups = [...productGroups, ...categoryGroups];
+        // Get product variants
+        db.select().from(productVariants)
+          .where(and(eq(productVariants.productId, id), eq(productVariants.storeId, storeId)))
+          .orderBy(asc(productVariants.sortOrder))
+          .catch(() => []),
 
-        groupsWithOptions = await Promise.all(
-          allGroups.map(async (group) => {
-            try {
-              const options = await db.select()
-                .from(modifierOptions)
-                .where(eq(modifierOptions.modifierGroupId, group.id))
-                .orderBy(asc(modifierOptions.sortOrder));
-              return { ...group, options };
-            } catch (e) {
-              return { ...group, options: [] };
-            }
-          })
-        );
-      } catch (e) {
-        fastify.log.warn('Modifier tables query failed, returning product without modifiers');
+        // Get variant combinations
+        db.select().from(productVariantCombinations)
+          .where(and(eq(productVariantCombinations.productId, id), eq(productVariantCombinations.storeId, storeId)))
+          .orderBy(asc(productVariantCombinations.sku))
+          .catch(() => []),
+      ]);
+
+      const allGroups = [...(productGroups as any[]), ...(categoryGroups as any[])];
+
+      // Batch fetch all modifier options for all groups at once
+      let groupsWithOptions: any[] = [];
+      if (allGroups.length > 0) {
+        const groupIds = allGroups.map(g => g.id);
+        const allOptions = await db.select().from(modifierOptions)
+          .where(inArray(modifierOptions.modifierGroupId, groupIds))
+          .orderBy(asc(modifierOptions.sortOrder));
+
+        // Group options by modifierGroupId
+        const optionsByGroup = new Map<string, any[]>();
+        for (const opt of allOptions) {
+          const groupId = opt.modifierGroupId;
+          if (!optionsByGroup.has(groupId)) optionsByGroup.set(groupId, []);
+          optionsByGroup.get(groupId)!.push(opt);
+        }
+
+        groupsWithOptions = allGroups.map(group => ({
+          ...group,
+          options: optionsByGroup.get(group.id) || [],
+        }));
       }
 
-      // Fetch product variants with options
+      // Batch fetch all variant options at once
       let variantsWithOptions: any[] = [];
-      try {
-        const variants = await db.select()
-          .from(productVariants)
-          .where(
-            and(
-              eq(productVariants.productId, id),
-              eq(productVariants.storeId, storeId)
-            )
-          )
-          .orderBy(asc(productVariants.sortOrder));
+      if ((variants as any[]).length > 0) {
+        const variantIds = (variants as any[]).map(v => v.id);
+        const allVariantOptions = await db.select().from(productVariantOptions)
+          .where(inArray(productVariantOptions.variantId, variantIds))
+          .orderBy(asc(productVariantOptions.sortOrder));
 
-        variantsWithOptions = await Promise.all(
-          variants.map(async (variant) => {
-            try {
-              const options = await db.select()
-                .from(productVariantOptions)
-                .where(eq(productVariantOptions.variantId, variant.id))
-                .orderBy(asc(productVariantOptions.sortOrder));
-              return { ...variant, options };
-            } catch (e) {
-              return { ...variant, options: [] };
-            }
-          })
-        );
-      } catch (e) {
-        fastify.log.warn('Variant tables query failed, returning product without variants');
-      }
+        // Group options by variantId
+        const optionsByVariant = new Map<string, any[]>();
+        for (const opt of allVariantOptions) {
+          if (!optionsByVariant.has(opt.variantId)) optionsByVariant.set(opt.variantId, []);
+          optionsByVariant.get(opt.variantId)!.push(opt);
+        }
 
-      // Fetch variant combinations
-      let variantCombinations: any[] = [];
-      try {
-        variantCombinations = await db.select()
-          .from(productVariantCombinations)
-          .where(
-            and(
-              eq(productVariantCombinations.productId, id),
-              eq(productVariantCombinations.storeId, storeId)
-            )
-          )
-          .orderBy(asc(productVariantCombinations.sku));
-      } catch (e) {
-        fastify.log.warn('Variant combinations query failed');
+        variantsWithOptions = (variants as any[]).map(variant => ({
+          ...variant,
+          options: optionsByVariant.get(variant.id) || [],
+        }));
       }
 
       return reply.send({
         data: {
-          ...productArr[0],
+          ...product,
           modifierGroups: groupsWithOptions,
           variants: variantsWithOptions,
-          variantCombinations: variantCombinations
+          variantCombinations: variantCombinations as any[]
         }
       });
     } catch (error: any) {

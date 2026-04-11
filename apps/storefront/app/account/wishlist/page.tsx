@@ -8,7 +8,8 @@ import { Heart, ShoppingBag, Trash2, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URL for client-side (proxied via Next.js rewrites)
+const API_URL = '';
 
 interface WishlistItem {
   id: string;
