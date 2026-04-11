@@ -1,6 +1,8 @@
 <script lang="ts">
     import '../app.css';
     import { page } from '$app/stores';
+    import { onMount } from 'svelte';
+    import { API_BASE_URL } from '$lib/api';
 
     let { children } = $props();
     let isSidebarOpen = $state(false);
@@ -8,6 +10,25 @@
 
     // Check if this is a super admin route
     let isSuperAdminRoute = $derived($page.url.pathname.startsWith('/super-admin'));
+
+    onMount(async () => {
+        const token = localStorage.getItem('merchant_token');
+        if (token) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/store`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.name) {
+                        storeName = data.name;
+                    }
+                }
+            } catch {
+                // Keep default store name
+            }
+        }
+    });
 
     // Close sidebar when route changes on mobile
     $effect(() => {
@@ -157,27 +178,6 @@
                     <div class="system-status-value">
                         <span class="status-indicator online"></span>
                         Online
-                    </div>
-                </div>
-
-                <div class="system-metrics">
-                    <div>
-                        <div class="metric-row">
-                            <span class="metric-label">CPU</span>
-                            <span class="metric-value">42%</span>
-                        </div>
-                        <div class="metric-bar">
-                            <div class="metric-bar-fill" style="width: 42%"></div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="metric-row">
-                            <span class="metric-label">MEM</span>
-                            <span class="metric-value">68%</span>
-                        </div>
-                        <div class="metric-bar">
-                            <div class="metric-bar-fill" style="width: 68%"></div>
-                        </div>
                     </div>
                 </div>
 

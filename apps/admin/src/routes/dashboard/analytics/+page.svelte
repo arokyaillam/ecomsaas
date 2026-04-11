@@ -22,7 +22,7 @@
   let topProducts: any[] = $state([]);
   let prevStats: Stats = $state({ revenue: 0, orders: 0, customers: 0, averageOrderValue: 0 });
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  import { API_BASE_URL } from '$lib/api';
 
   onMount(() => {
     fetchAnalytics();
@@ -33,18 +33,38 @@
     try {
       const token = localStorage.getItem('merchant_token');
 
-      const statsRes = await fetch(`${API_URL}/api/analytics/dashboard?period=${period}`, {
+      // Fetch current period stats
+      const statsRes = await fetch(`${API_BASE_URL}/api/analytics/dashboard?period=${period}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (statsRes.ok) {
         const data = await statsRes.json();
-        prevStats = stats;
         stats = data.data;
         topProducts = data.data.topProducts || [];
       }
 
-      const chartRes = await fetch(`${API_URL}/api/analytics/sales-chart?period=${period === 'today' ? '24h' : period === 'week' ? '7d' : period === 'month' ? '30d' : '12m'}`, {
+      // Fetch previous period stats for comparison
+      const prevPeriodMap: Record<string, string> = {
+        today: 'yesterday',
+        week: 'prevWeek',
+        month: 'prevMonth',
+        year: 'prevYear',
+      };
+      const prevPeriod = prevPeriodMap[period] || 'week';
+      const prevRes = await fetch(`${API_BASE_URL}/api/analytics/dashboard?period=${prevPeriod}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (prevRes.ok) {
+        const prevData = await prevRes.json();
+        prevStats = prevData.data;
+      } else {
+        // Fallback: if previous period endpoint doesn't support these values, use zeroes
+        prevStats = { revenue: 0, orders: 0, customers: 0, averageOrderValue: 0 };
+      }
+
+      const chartRes = await fetch(`${API_BASE_URL}/api/analytics/sales-chart?period=${period === 'today' ? '24h' : period === 'week' ? '7d' : period === 'month' ? '30d' : '12m'}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -90,7 +110,7 @@
       <p>Real-time performance metrics and insights</p>
     </div>
     <div class="flex gap-2">
-      {#each [['today', 'Today'], ['week', '7 Days'], ['month', '30 Days'], ['year', 'Year']] as [p, label]}
+      {#each [['today' as const, 'Today'], ['week' as const, '7 Days'], ['month' as const, '30 Days'], ['year' as const, 'Year']] as [p, label]}
         <button
           onclick={() => { period = p; fetchAnalytics(); }}
           class="period-btn {period === p ? 'active' : ''}"

@@ -101,7 +101,10 @@ export function CustomerAuthProvider({ children, storeId }: { children: React.Re
     try {
       const res = await fetch(`${API_URL}/api/customers/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-store-domain': window.location.hostname,
+        },
         body: JSON.stringify({ storeId, email, password }),
       });
 
@@ -127,7 +130,10 @@ export function CustomerAuthProvider({ children, storeId }: { children: React.Re
     try {
       const res = await fetch(`${API_URL}/api/customers/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-store-domain': window.location.hostname,
+        },
         body: JSON.stringify({ ...data, storeId }),
       });
 

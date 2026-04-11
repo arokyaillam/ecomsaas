@@ -23,21 +23,34 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     const { period = 'today' } = request.query as any;
 
     try {
-      // Calculate date range
+      // Calculate date range based on period (supports previous periods for comparison)
       const now = new Date();
       let startDate = new Date();
       switch (period) {
         case 'today':
           startDate.setHours(0, 0, 0, 0);
           break;
+        case 'yesterday':
+          startDate.setDate(now.getDate() - 1);
+          startDate.setHours(0, 0, 0, 0);
+          break;
         case 'week':
           startDate.setDate(now.getDate() - 7);
+          break;
+        case 'prevWeek':
+          startDate.setDate(now.getDate() - 14);
           break;
         case 'month':
           startDate.setMonth(now.getMonth() - 1);
           break;
+        case 'prevMonth':
+          startDate.setMonth(now.getMonth() - 2);
+          break;
         case 'year':
           startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        case 'prevYear':
+          startDate.setFullYear(now.getFullYear() - 2);
           break;
       }
 
@@ -399,9 +412,85 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.post('/track', async (request, reply) => {
     const { storeId, event, data } = request.body as any;
 
+    if (!storeId || !event) {
+      return reply.status(400).send({ error: 'storeId and event are required' });
+    }
+
     try {
-      // This would typically use a queue or analytics service
-      // For now, we'll just acknowledge receipt
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Upsert analytics row for today
+      const existing = await db.select()
+        .from(storeAnalytics)
+        .where(and(
+          eq(storeAnalytics.storeId, storeId),
+          eq(storeAnalytics.date, today)
+        ))
+        .limit(1);
+
+      // Map event names to column increment logic
+      type TrackableEvent = 'page_view' | 'add_to_cart' | 'checkout_started' | 'checkout_completed' | 'order';
+      const validEvents: TrackableEvent[] = ['page_view', 'add_to_cart', 'checkout_started', 'checkout_completed', 'order'];
+
+      if (!validEvents.includes(event as TrackableEvent)) {
+        return reply.send({ success: true });
+      }
+
+      if (existing.length > 0) {
+        // Build update with the correct column incremented
+        const updateData: Record<string, any> = { updatedAt: new Date() };
+
+        switch (event as TrackableEvent) {
+          case 'page_view':
+            updateData.pageViews = sql`${storeAnalytics.pageViews} + 1`;
+            break;
+          case 'add_to_cart':
+            updateData.addToCarts = sql`${storeAnalytics.addToCarts} + 1`;
+            break;
+          case 'checkout_started':
+            updateData.checkoutsStarted = sql`${storeAnalytics.checkoutsStarted} + 1`;
+            break;
+          case 'checkout_completed':
+            updateData.checkoutsCompleted = sql`${storeAnalytics.checkoutsCompleted} + 1`;
+            break;
+          case 'order':
+            updateData.orders = sql`${storeAnalytics.orders} + 1`;
+            break;
+        }
+
+        if (data?.revenue) {
+          updateData.revenue = sql`${storeAnalytics.revenue} + ${data.revenue}`;
+        }
+
+        await db.update(storeAnalytics)
+          .set(updateData)
+          .where(eq(storeAnalytics.id, existing[0].id));
+      } else {
+        // Insert new row for today
+        const baseData = {
+          storeId,
+          date: today,
+          visitors: 0,
+          pageViews: 0,
+          addToCarts: 0,
+          checkoutsStarted: 0,
+          checkoutsCompleted: 0,
+          orders: 0,
+          revenue: data?.revenue ? String(data.revenue) : '0',
+        };
+
+        switch (event as TrackableEvent) {
+          case 'page_view': baseData.pageViews = 1; break;
+          case 'add_to_cart': baseData.addToCarts = 1; break;
+          case 'checkout_started': baseData.checkoutsStarted = 1; break;
+          case 'checkout_completed': baseData.checkoutsCompleted = 1; break;
+          case 'order': baseData.orders = 1; break;
+        }
+
+        await db.insert(storeAnalytics).values(baseData);
+      }
+
       return reply.send({ success: true });
     } catch (error) {
       fastify.log.error(error);

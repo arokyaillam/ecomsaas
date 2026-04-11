@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { ArrowLeft, Save, Percent, DollarSign } from 'lucide-svelte';
+  import { API_BASE_URL } from '$lib/api';
 
   let loading = false;
   let error = '';
@@ -18,7 +19,6 @@
     expiresAt: '',
   };
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   function generateCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -44,8 +44,8 @@
     error = '';
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/coupons/admin`, {
+      const token = localStorage.getItem('merchant_token');
+      const res = await fetch(`${API_BASE_URL}/api/coupons/admin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

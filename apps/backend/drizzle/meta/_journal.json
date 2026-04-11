@@ -43,6 +43,13 @@
       "when": 1775886000000,
       "tag": "0005_add_merchant_management",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775890000000,
+      "tag": "0006_add_constraints_and_indexes",
+      "breakpoints": true
     }
   ]
 }

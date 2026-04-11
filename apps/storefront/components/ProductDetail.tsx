@@ -96,13 +96,19 @@ export function ProductDetail({ product, store, reviews, modifiers }: ProductDet
   const images = product.images ? product.images.split(',') : [];
   const currencySymbol = store?.currency === 'USD' ? '$' : store?.currency === 'EUR' ? '€' : store?.currency === 'GBP' ? '£' : store?.currency || '$';
 
-  const modifierTotal = selectedModifiers.reduce((sum, mod) => sum + Number(mod.price || 0), 0);
+  const modifierTotal = selectedModifiers.reduce((sum, mod) => sum + Number(mod.priceAdjustment || mod.price || 0), 0);
   const totalPrice = Number(product.salePrice || product.regularPrice) + modifierTotal;
 
   const handleAddToCart = async () => {
     setAddingToCart(true);
     try {
-      await addToCart(product.id, quantity, selectedModifiers.map(m => ({ modifierId: m.id, name: m.name, price: m.price })));
+      await addToCart(product.id, quantity, selectedModifiers.map(m => ({
+        groupId: m.groupId || m.modifierGroupId || m.id,
+        groupName: m.groupName || m.nameEn || m.name || '',
+        optionId: m.optionId || m.id,
+        optionName: m.optionName || m.nameEn || m.name || '',
+        priceAdjustment: Number(m.priceAdjustment || m.price || 0),
+      })));
     } catch (err) {
       console.error('Failed to add to cart:', err);
     } finally {

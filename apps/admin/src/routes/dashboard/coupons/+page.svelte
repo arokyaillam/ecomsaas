@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Percent, Tag, Calendar, Trash2, Edit, Plus, Search, Filter } from 'lucide-svelte';
+  import { API_BASE_URL } from '$lib/api';
 
   interface Coupon {
     id: string;
@@ -25,7 +26,6 @@
   let statusFilter = $state('');
   let searchQuery = $state('');
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   onMount(async () => {
     await fetchCoupons();
@@ -37,7 +37,7 @@
       const params = new URLSearchParams();
       if (statusFilter) params.append('status', statusFilter);
 
-      const res = await fetch(`${API_URL}/api/coupons/admin?${params}`, {
+      const res = await fetch(`${API_BASE_URL}/api/coupons/admin?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -59,7 +59,7 @@
 
     try {
       const token = localStorage.getItem('merchant_token');
-      const res = await fetch(`${API_URL}/api/coupons/admin/${couponId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/coupons/admin/${couponId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -54,14 +54,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           const title = (p.titleEn || '').toLowerCase();
           const desc = (p.descriptionEn || '').toLowerCase();
           const titleAr = (p.titleAr || '').toLowerCase();
-          const barcode = (p.barcode || '').toLowerCase();
-          const sku = (p.sku || '').toLowerCase();
           matchesQuery =
             title.includes(query) ||
             desc.includes(query) ||
-            titleAr.includes(query) ||
-            barcode.includes(query) ||
-            sku.includes(query);
+            titleAr.includes(query);
         }
 
         if (categoryId) {

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Star, Check, X, MessageSquare, Trash2, Filter } from 'lucide-svelte';
+  import { API_BASE_URL } from '$lib/api';
 
   interface Review {
     id: string;
@@ -32,7 +33,6 @@
   let respondingTo: string | null = $state(null);
   let responseText = $state('');
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   onMount(async () => {
     await fetchReviews();
@@ -44,7 +44,7 @@
       const params = new URLSearchParams();
       if (statusFilter) params.append('status', statusFilter);
 
-      const res = await fetch(`${API_URL}/api/reviews/admin?${params}`, {
+      const res = await fetch(`${API_BASE_URL}/api/reviews/admin?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -64,7 +64,7 @@
   async function approveReview(reviewId: string, isApproved: boolean) {
     try {
       const token = localStorage.getItem('merchant_token');
-      const res = await fetch(`${API_URL}/api/reviews/admin/${reviewId}/approve`, {
+      const res = await fetch(`${API_BASE_URL}/api/reviews/admin/${reviewId}/approve`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -86,7 +86,7 @@
 
     try {
       const token = localStorage.getItem('merchant_token');
-      const res = await fetch(`${API_URL}/api/reviews/admin/${reviewId}/respond`, {
+      const res = await fetch(`${API_BASE_URL}/api/reviews/admin/${reviewId}/respond`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +112,7 @@
 
     try {
       const token = localStorage.getItem('merchant_token');
-      const res = await fetch(`${API_URL}/api/reviews/admin/${reviewId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/reviews/admin/${reviewId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

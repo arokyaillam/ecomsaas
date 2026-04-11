@@ -1,19 +1,28 @@
 import { FastifyInstance } from 'fastify';
 import { db, orders, orderItems, products, customers, activityLogs } from '../db/index.js';
-import { eq, and, desc, sql, asc } from 'drizzle-orm';
+import { eq, and, desc, sql, asc, gte } from 'drizzle-orm';
+import { z } from 'zod';
+import { requireAuth } from '../middleware/auth.js';
+
+// Validation schemas
+const orderStatusSchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled']).optional(),
+  paymentStatus: z.enum(['pending', 'paid', 'failed', 'refunded', 'partially_refunded']).optional(),
+  fulfillmentStatus: z.enum(['unfulfilled', 'partial', 'fulfilled']).optional(),
+  adminNotes: z.string().max(1000).optional(),
+});
+
+const trackingSchema = z.object({
+  carrier: z.string().min(1).max(200),
+  trackingNumber: z.string().min(1).max(100),
+});
 
 export default async function orderRoutes(fastify: FastifyInstance) {
   // ========== PUBLIC/CUSTOMER ROUTES ==========
 
   // Get customer orders
   fastify.get('/customer', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { customerId: string };
     const customerId = user.customerId;
@@ -60,13 +69,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Get customer order by ID
   fastify.get('/customer/:orderId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const user = request.user as { customerId: string };
@@ -101,17 +104,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Get all orders for store
   fastify.get('/admin', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { storeId: string };
     const storeId = user.storeId;
@@ -186,17 +179,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Get recent orders (for activity feed)
   fastify.get('/admin/recent', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { storeId: string };
     const { limit = '5' } = request.query as any;
@@ -240,17 +223,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Get order details (admin)
   fastify.get('/admin/:orderId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const user = request.user as { storeId: string };
@@ -299,20 +272,14 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Update order status
   fastify.put('/admin/:orderId/status', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
-    const { status, paymentStatus, fulfillmentStatus, adminNotes } = request.body as any;
+    const parsed = orderStatusSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid status data', details: parsed.error.format() });
+    }
+    const { status, paymentStatus, fulfillmentStatus, adminNotes } = parsed.data;
     const user = request.user as { storeId: string; userId: string };
 
     try {
@@ -368,20 +335,14 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Update tracking info
   fastify.put('/admin/:orderId/tracking', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
-    const { carrier, trackingNumber } = request.body as any;
+    const parsed = trackingSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid tracking data', details: parsed.error.format() });
+    }
+    const { carrier, trackingNumber } = parsed.data;
     const user = request.user as { storeId: string };
 
     try {
@@ -408,53 +369,52 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
   // Get order statistics
   fastify.get('/admin/stats', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { storeId: string };
     const { period = 'today' } = request.query as any;
 
     try {
-      let dateFilter = '';
       const now = new Date();
+      let startDate: Date;
 
       switch (period) {
-        case 'today':
-          dateFilter = `AND created_at >= '${now.toISOString().split('T')[0]}'`;
-          break;
         case 'week':
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          dateFilter = `AND created_at >= '${weekAgo.toISOString()}'`;
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
-          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          dateFilter = `AND created_at >= '${monthAgo.toISOString()}'`;
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
+        case 'today':
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       }
 
-      const stats = await db.execute(sql`
-        SELECT
-          COUNT(*) as total_orders,
-          COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total::numeric ELSE 0 END), 0) as revenue,
-          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_orders,
-          COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing_orders,
-          COUNT(CASE WHEN status = 'shipped' THEN 1 END) as shipped_orders,
-          COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered_orders
-        FROM orders
-        WHERE store_id = ${user.storeId} ${sql.raw(dateFilter)}
-      `);
+      const stats = await db.select({
+        totalOrders: sql<number>`cast(count(*) as integer)`,
+        revenue: sql<string>`COALESCE(SUM(CASE WHEN ${orders.status} != 'cancelled' THEN ${orders.total}::numeric ELSE 0 END), 0)::text`,
+        pendingOrders: sql<number>`cast(count(CASE WHEN ${orders.status} = 'pending' THEN 1 END) as integer)`,
+        processingOrders: sql<number>`cast(count(CASE WHEN ${orders.status} = 'processing' THEN 1 END) as integer)`,
+        shippedOrders: sql<number>`cast(count(CASE WHEN ${orders.status} = 'shipped' THEN 1 END) as integer)`,
+        deliveredOrders: sql<number>`cast(count(CASE WHEN ${orders.status} = 'delivered' THEN 1 END) as integer)`,
+      })
+        .from(orders)
+        .where(and(
+          eq(orders.storeId, user.storeId),
+          gte(orders.createdAt, startDate)
+        ));
 
-      const statsData = stats as unknown as any[];
-      return reply.send({ data: statsData[0] || {} });
+      const statsData = stats[0];
+      return reply.send({
+        data: {
+          totalOrders: statsData?.totalOrders || 0,
+          revenue: Number(statsData?.revenue || 0),
+          pendingOrders: statsData?.pendingOrders || 0,
+          processingOrders: statsData?.processingOrders || 0,
+          shippedOrders: statsData?.shippedOrders || 0,
+          deliveredOrders: statsData?.deliveredOrders || 0,
+        },
+      });
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Failed to fetch stats' });

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, stores, users, superAdmins, merchantPlans } from '../db/index.js';
+import { db as _db, orders, orderItems, products, categories, customers, carts, cartItems, coupons, wishlists, reviews, modifierGroups, modifierOptions, productVariants, productVariantOptions, productVariantCombinations, customerAddresses, emailTemplates, activityLogs, storeAnalytics, subcategories } from '../db/index.js';
 import { eq, and, desc, asc, sql, count } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
@@ -218,8 +219,15 @@ export default async function superAdminRoutes(fastify: FastifyInstance) {
         plan = planArr[0] || null;
       }
 
-      // Get owner details
-      const ownerArr = await db.select()
+      // Get owner details (exclude password hash)
+      const ownerArr = await db.select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        storeId: users.storeId,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
         .from(users)
         .where(and(
           eq(users.storeId, id),
@@ -267,7 +275,7 @@ export default async function superAdminRoutes(fastify: FastifyInstance) {
         updatedAt: new Date()
       };
 
-      if (status === 'active' && !reason) {
+      if (status === 'active') {
         updateData.isApproved = true;
         updateData.approvedAt = new Date();
         updateData.approvedBy = admin.superAdminId;
@@ -337,18 +345,71 @@ export default async function superAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /api/super-admin/merchants/:id - Delete merchant
+  // DELETE /api/super-admin/merchants/:id - Delete merchant (with cascade)
   fastify.delete('/merchants/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     try {
-      const deleted = await db.delete(stores)
-        .where(eq(stores.id, id))
-        .returning({ id: stores.id });
-
-      if (deleted.length === 0) {
+      // Verify store exists
+      const storeArr = await db.select({ id: stores.id }).from(stores).where(eq(stores.id, id)).limit(1);
+      if (storeArr.length === 0) {
         return reply.status(404).send({ error: 'Merchant not found' });
       }
+
+      // Delete all store-related data in a transaction to avoid FK violations
+      await db.transaction(async (tx) => {
+        // Delete in order of dependencies (child → parent)
+        await tx.delete(storeAnalytics).where(eq(storeAnalytics.storeId, id));
+        await tx.delete(activityLogs).where(eq(activityLogs.storeId, id));
+        await tx.delete(emailTemplates).where(eq(emailTemplates.storeId, id));
+
+        // Order items first, then orders
+        const storeOrders = await tx.select({ id: orders.id }).from(orders).where(eq(orders.storeId, id));
+        for (const order of storeOrders) {
+          await tx.delete(orderItems).where(eq(orderItems.orderId, order.id));
+        }
+        await tx.delete(orders).where(eq(orders.storeId, id));
+
+        // Cart items first, then carts
+        const storeCarts = await tx.select({ id: carts.id }).from(carts).where(eq(carts.storeId, id));
+        for (const cart of storeCarts) {
+          await tx.delete(cartItems).where(eq(cartItems.cartId, cart.id));
+        }
+        await tx.delete(carts).where(eq(carts.storeId, id));
+
+        // Customer addresses first, then customers
+        const storeCustomers = await tx.select({ id: customers.id }).from(customers).where(eq(customers.storeId, id));
+        for (const customer of storeCustomers) {
+          await tx.delete(customerAddresses).where(eq(customerAddresses.customerId, customer.id));
+        }
+        await tx.delete(customers).where(eq(customers.storeId, id));
+
+        // Product-related: combinations → options → variants → modifier options → groups → subcategories → products
+        await tx.delete(productVariantCombinations).where(eq(productVariantCombinations.storeId, id));
+        const storeVariants = await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.storeId, id));
+        for (const variant of storeVariants) {
+          await tx.delete(productVariantOptions).where(eq(productVariantOptions.variantId, variant.id));
+        }
+        await tx.delete(productVariants).where(eq(productVariants.storeId, id));
+
+        await tx.delete(modifierOptions).where(eq(modifierOptions.storeId, id));
+        await tx.delete(modifierGroups).where(eq(modifierGroups.storeId, id));
+
+        await tx.delete(wishlists).where(eq(wishlists.storeId, id));
+        await tx.delete(reviews).where(eq(reviews.storeId, id));
+        await tx.delete(coupons).where(eq(coupons.storeId, id));
+
+        const storeProducts = await tx.select({ id: products.id }).from(products).where(eq(products.storeId, id));
+        // Order items referencing these products were already deleted above
+        await tx.delete(products).where(eq(products.storeId, id));
+
+        await tx.delete(subcategories).where(eq(subcategories.storeId, id));
+        await tx.delete(categories).where(eq(categories.storeId, id));
+
+        // Finally, delete users and the store
+        await tx.delete(users).where(eq(users.storeId, id));
+        await tx.delete(stores).where(eq(stores.id, id));
+      });
 
       return reply.send({ message: 'Merchant deleted successfully' });
     } catch (error) {

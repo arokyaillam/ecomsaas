@@ -35,6 +35,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
   const [shippingForm, setShippingForm] = useState<ShippingForm>({
     firstName: '',
@@ -97,11 +98,13 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/checkout`, {
+      const res = await fetch(`${API_URL}/api/checkout/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          storeId: store?.id,
+          cartId: cart?.id,
           shippingAddress: {
             name: `${shippingForm.firstName} ${shippingForm.lastName}`,
             firstName: shippingForm.firstName,
@@ -138,7 +141,8 @@ export default function CheckoutPage() {
         throw new Error(data.error || 'Failed to place order');
       }
 
-      setOrderId(data.data.order.id);
+      setOrderId(data.data.orderId);
+      setOrderNumber(data.data.orderNumber);
       setOrderComplete(true);
       fetchCart(); // Clear cart
     } catch (err: any) {

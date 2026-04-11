@@ -308,13 +308,13 @@ export default async function Home() {
                 Quick Links
               </h4>
               <ul className="space-y-3">
-                {['Shop All', 'Categories', 'New Arrivals', 'Sale'].map((link) => (
-                  <li key={link}>
+                {[{ label: 'Shop All', href: '/search' }, { label: 'Categories', href: '/search' }, { label: 'New Arrivals', href: '/search?sort=newest' }, { label: 'Sale', href: '/search?sale=true' }].map((link) => (
+                  <li key={link.label}>
                     <Link
-                      href="#"
+                      href={link.href}
                       className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors font-mono text-sm uppercase tracking-wider"
                     >
-                      {link}
+                      {link.label}
                     </Link>
                   </li>
                 ))}
@@ -327,13 +327,13 @@ export default async function Home() {
                 Support
               </h4>
               <ul className="space-y-3">
-                {['Contact Us', 'FAQ', 'Shipping', 'Returns'].map((link) => (
-                  <li key={link}>
+                {[{ label: 'Contact Us', href: 'mailto:contact@store.com' }, { label: 'FAQ', href: '/search' }, { label: 'Shipping', href: '/search' }, { label: 'Returns', href: '/search' }].map((link) => (
+                  <li key={link.label}>
                     <Link
-                      href="#"
+                      href={link.href}
                       className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors font-mono text-sm uppercase tracking-wider"
                     >
-                      {link}
+                      {link.label}
                     </Link>
                   </li>
                 ))}
@@ -348,13 +348,13 @@ export default async function Home() {
             </p>
             <div className="flex items-center gap-6">
               <Link
-                href="#"
+                href="/search"
                 className="text-caption text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Privacy Policy
               </Link>
               <Link
-                href="#"
+                href="/search"
                 className="text-caption text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Terms of Service

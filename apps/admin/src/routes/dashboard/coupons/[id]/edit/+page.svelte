@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { ArrowLeft, Save, Percent, DollarSign, Loader2 } from 'lucide-svelte';
+  import { API_BASE_URL } from '$lib/api';
 
   let loading = false;
   let saving = false;
@@ -21,7 +22,6 @@
     expiresAt: '',
   };
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   const couponId = $page.params.id;
 
   onMount(async () => {
@@ -30,8 +30,8 @@
 
   async function fetchCoupon() {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/coupons/admin/${couponId}`, {
+      const token = localStorage.getItem('merchant_token');
+      const res = await fetch(`${API_BASE_URL}/api/coupons/admin/${couponId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -75,8 +75,8 @@
     error = '';
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/coupons/admin/${couponId}`, {
+      const token = localStorage.getItem('merchant_token');
+      const res = await fetch(`${API_BASE_URL}/api/coupons/admin/${couponId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

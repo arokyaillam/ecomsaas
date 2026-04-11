@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, decimal, boolean, json } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, integer, decimal, boolean, json, unique } from "drizzle-orm/pg-core";
 
 // Super Admin users (platform level)
 export const superAdmins = pgTable("super_admins", {
@@ -255,7 +255,9 @@ export const customers = pgTable("customers", {
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  emailStoreUnique: unique().on(table.email, table.storeId),
+}));
 
 // Customer Addresses
 export const customerAddresses = pgTable("customer_addresses", {
@@ -332,7 +334,7 @@ export const orders = pgTable("orders", {
   deliveredAt: timestamp("delivered_at"),
   // Discounts
   couponCode: text("coupon_code"),
-  couponId: uuid("coupon_id"),
+  couponId: uuid("coupon_id").references(() => coupons.id),
   // Metadata
   notes: text("notes"), // Customer notes
   adminNotes: text("admin_notes"), // Internal notes
@@ -517,5 +519,6 @@ export const storeAnalytics = pgTable("store_analytics", {
   checkoutsStarted: integer("checkouts_started").default(0),
   checkoutsCompleted: integer("checkouts_completed").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

@@ -57,6 +57,33 @@ export default async function RootLayout({
 
   const theme = store?.theme || defaultTheme;
 
+  // Sanitize theme values to prevent CSS injection
+  const sanitizeCssValue = (value: string | null | undefined, fallback: string): string => {
+    if (!value) return fallback;
+    // Only allow safe CSS values: hex colors, rgba/hsla functions, and simple values
+    const str = value.trim();
+    if (/^#[0-9a-fA-F]{3,8}$/.test(str)) return str;
+    if (/^(rgba?\(|hsla?\()\s*[\d\s,.%]+\)$/.test(str)) return str;
+    if (/^\d+(\.\d+)?(px|rem|em|%)$/.test(str)) return str;
+    if (/^[a-zA-Z0-9\s,'"-]+$/.test(str) && !/[;{}]/.test(str)) return str;
+    return fallback;
+  };
+
+  const safeTheme = {
+    primaryColor: sanitizeCssValue(theme.primaryColor, defaultTheme.primaryColor),
+    secondaryColor: sanitizeCssValue(theme.secondaryColor, defaultTheme.secondaryColor),
+    accentColor: sanitizeCssValue(theme.accentColor, defaultTheme.accentColor),
+    backgroundColor: sanitizeCssValue(theme.backgroundColor, defaultTheme.backgroundColor),
+    surfaceColor: sanitizeCssValue(theme.surfaceColor, defaultTheme.surfaceColor),
+    textColor: sanitizeCssValue(theme.textColor, defaultTheme.textColor),
+    textSecondaryColor: sanitizeCssValue(theme.textSecondaryColor, defaultTheme.textSecondaryColor),
+    borderColor: sanitizeCssValue(theme.borderColor, defaultTheme.borderColor),
+    borderRadius: sanitizeCssValue(theme.borderRadius, defaultTheme.borderRadius),
+    fontFamily: sanitizeCssValue(theme.fontFamily, defaultTheme.fontFamily),
+    logoUrl: theme.logoUrl,
+    faviconUrl: theme.faviconUrl,
+  };
+
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
@@ -67,16 +94,16 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
         <style>{`
           :root {
-            --primary: ${theme.primaryColor};
-            --secondary: ${theme.secondaryColor};
-            --accent: ${theme.accentColor};
-            --background: ${theme.backgroundColor};
-            --surface: ${theme.surfaceColor};
-            --text: ${theme.textColor};
-            --text-secondary: ${theme.textSecondaryColor};
-            --border: ${theme.borderColor};
-            --radius: ${theme.borderRadius};
-            --font-family: ${theme.fontFamily};
+            --primary: ${safeTheme.primaryColor};
+            --secondary: ${safeTheme.secondaryColor};
+            --accent: ${safeTheme.accentColor};
+            --background: ${safeTheme.backgroundColor};
+            --surface: ${safeTheme.surfaceColor};
+            --text: ${safeTheme.textColor};
+            --text-secondary: ${safeTheme.textSecondaryColor};
+            --border: ${safeTheme.borderColor};
+            --radius: ${safeTheme.borderRadius};
+            --font-family: ${safeTheme.fontFamily};
           }
 
           body {

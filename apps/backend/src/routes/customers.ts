@@ -1,13 +1,67 @@
 import { FastifyInstance } from 'fastify';
-import { db, customers, customerAddresses, orders, reviews } from '../db/index.js';
+import { db, customers, customerAddresses, orders, reviews, stores } from '../db/index.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { requireAuth } from '../middleware/auth.js';
+
+const authRateLimit = {
+  max: 5,
+  timeWindow: '5 minutes',
+  keyGenerator: (req: any) => req.ip || 'unknown',
+};
+
+// Address validation schema
+const addressSchema = z.object({
+  name: z.string().min(1).max(100),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  addressLine1: z.string().min(1).max(200),
+  addressLine2: z.string().max(200).optional().nullable(),
+  city: z.string().min(1).max(100),
+  state: z.string().max(100).optional().nullable(),
+  country: z.string().min(1).max(100),
+  postalCode: z.string().min(1).max(20),
+  phone: z.string().max(30).optional().nullable(),
+  isDefault: z.boolean().optional().default(false),
+});
+
+// Fields to select when returning customer data (excludes password)
+const customerFields = {
+  id: customers.id,
+  email: customers.email,
+  firstName: customers.firstName,
+  lastName: customers.lastName,
+  phone: customers.phone,
+  avatarUrl: customers.avatarUrl,
+  isVerified: customers.isVerified,
+  storeId: customers.storeId,
+  lastLoginAt: customers.lastLoginAt,
+  createdAt: customers.createdAt,
+};
 
 export default async function customerRoutes(fastify: FastifyInstance) {
   // Register customer
-  fastify.post('/register', async (request, reply) => {
-    const { storeId, email, password, firstName, lastName, phone } = request.body as any;
+  fastify.post('/register', {
+    config: authRateLimit,
+  }, async (request, reply) => {
+    const { email, password, firstName, lastName, phone } = request.body as any;
+
+    // Derive storeId from the storefront domain header instead of trusting the request body
+    const domain = request.headers['x-store-domain'] as string || 'localhost';
+    let storeId: string;
+
+    try {
+      const storeArr = await db.select({ id: stores.id }).from(stores).where(eq(stores.domain, domain)).limit(1);
+      if (storeArr.length === 0) {
+        return reply.status(400).send({ error: 'Store not found' });
+      }
+      storeId = storeArr[0].id;
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to register' });
+    }
 
     try {
       // Check if email exists
@@ -65,7 +119,9 @@ export default async function customerRoutes(fastify: FastifyInstance) {
   });
 
   // Login customer
-  fastify.post('/login', async (request, reply) => {
+  fastify.post('/login', {
+    config: authRateLimit,
+  }, async (request, reply) => {
     const { storeId, email, password } = request.body as any;
 
     try {
@@ -121,13 +177,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Get customer profile
   fastify.get('/profile', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { customerId: string };
 
@@ -184,13 +234,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Update customer profile
   fastify.put('/profile', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { customerId: string };
     const { firstName, lastName, phone, marketingEmails } = request.body as any;
@@ -215,13 +259,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Change password
   fastify.put('/password', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { customerId: string };
     const { currentPassword, newPassword } = request.body as any;
@@ -258,13 +296,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Get customer addresses
   fastify.get('/addresses', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { customerId: string };
 
@@ -283,16 +315,15 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Add address
   fastify.post('/addresses', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { customerId: string; storeId: string };
-    const addressData = request.body as any;
+    const parsed = addressSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid address data', details: parsed.error.format() });
+    }
+
+    const addressData = parsed.data;
 
     try {
       // If this is the first address or marked as default, update others
@@ -320,17 +351,16 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Update address
   fastify.put('/addresses/:addressId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { addressId } = request.params as { addressId: string };
     const user = request.user as { customerId: string };
-    const addressData = request.body as any;
+    const parsed = addressSchema.partial().safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid address data', details: parsed.error.format() });
+    }
+
+    const addressData = parsed.data;
 
     try {
       // If setting as default, update others
@@ -340,11 +370,21 @@ export default async function customerRoutes(fastify: FastifyInstance) {
           .where(eq(customerAddresses.customerId, user.customerId));
       }
 
+      const updateData: any = { updatedAt: new Date() };
+      if (addressData.name !== undefined) updateData.name = addressData.name;
+      if (addressData.firstName !== undefined) updateData.firstName = addressData.firstName;
+      if (addressData.lastName !== undefined) updateData.lastName = addressData.lastName;
+      if (addressData.addressLine1 !== undefined) updateData.addressLine1 = addressData.addressLine1;
+      if (addressData.addressLine2 !== undefined) updateData.addressLine2 = addressData.addressLine2;
+      if (addressData.city !== undefined) updateData.city = addressData.city;
+      if (addressData.state !== undefined) updateData.state = addressData.state;
+      if (addressData.country !== undefined) updateData.country = addressData.country;
+      if (addressData.postalCode !== undefined) updateData.postalCode = addressData.postalCode;
+      if (addressData.phone !== undefined) updateData.phone = addressData.phone;
+      if (addressData.isDefault !== undefined) updateData.isDefault = addressData.isDefault;
+
       await db.update(customerAddresses)
-        .set({
-          ...addressData,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(and(
           eq(customerAddresses.id, addressId),
           eq(customerAddresses.customerId, user.customerId)
@@ -359,13 +399,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Delete address
   fastify.delete('/addresses/:addressId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { addressId } = request.params as { addressId: string };
     const user = request.user as { customerId: string };
@@ -388,17 +422,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Get all customers for store
   fastify.get('/admin', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { storeId: string };
     const storeId = user.storeId;
@@ -407,18 +431,18 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     try {
       const offset = (Number(page) - 1) * Number(limit);
 
-      let query = db.select().from(customers).where(eq(customers.storeId, storeId));
+      let query = db.select(customerFields).from(customers).where(eq(customers.storeId, storeId));
 
       // Search functionality
       if (search) {
-        const searchLower = search.toLowerCase();
-        query = db.select().from(customers).where(
+        const searchLower = `%${search.toLowerCase()}%`;
+        query = db.select(customerFields).from(customers).where(
           and(
             eq(customers.storeId, storeId),
             sql`(
-              LOWER(${customers.email}) LIKE ${`%${searchLower}%`} OR
-              LOWER(${customers.firstName}) LIKE ${`%${searchLower}%`} OR
-              LOWER(${customers.lastName}) LIKE ${`%${searchLower}%`}
+              LOWER(${customers.email}) LIKE ${searchLower} OR
+              LOWER(${customers.firstName}) LIKE ${searchLower} OR
+              LOWER(${customers.lastName}) LIKE ${searchLower}
             )`
           )
         );
@@ -446,6 +470,7 @@ export default async function customerRoutes(fastify: FastifyInstance) {
             ...customer,
             orderCount: Number(orderCount[0]?.count || 0),
             totalSpent: Number(totalSpent[0]?.total || 0),
+            // password already excluded by select
           };
         })
       );
@@ -471,23 +496,13 @@ export default async function customerRoutes(fastify: FastifyInstance) {
 
   // Get single customer (admin)
   fastify.get('/admin/:customerId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { customerId } = request.params as { customerId: string };
     const user = request.user as { storeId: string };
 
     try {
-      const customerArr = await db.select()
+      const customerArr = await db.select(customerFields)
         .from(customers)
         .where(and(
           eq(customers.id, customerId),

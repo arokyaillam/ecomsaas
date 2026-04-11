@@ -2,72 +2,118 @@ import { FastifyInstance } from 'fastify';
 import { db, carts, cartItems, products, coupons } from '../db/index.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 
 const generateSessionId = () => `sess_${randomUUID().replace(/-/g, '')}`;
+
+// Helper: get cart identifier from request (session or customer)
+function getCartIdentifier(request: any): { sessionId: string | null; customerId: string | null } {
+  let sessionId: string | null = request.cookies?.cart_session_id || null;
+  let customerId: string | null = null;
+
+  try {
+    request.jwtVerify();
+    const user = request.user as { customerId?: string };
+    customerId = user?.customerId || null;
+  } catch {
+    // Not logged in
+  }
+
+  return { sessionId, customerId };
+}
+
+// Helper: find or create cart for a given store
+async function findOrCreateCart(
+  storeId: string,
+  sessionId: string | null,
+  customerId: string | null,
+  reply: any
+): Promise<{ cart: any; sessionId: string }> {
+  let effectiveSessionId = sessionId;
+
+  if (!effectiveSessionId && !customerId) {
+    effectiveSessionId = generateSessionId();
+    reply.setCookie('cart_session_id', effectiveSessionId, {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+    });
+  }
+
+  let cartQuery;
+  if (customerId) {
+    cartQuery = db.select().from(carts).where(
+      and(eq(carts.storeId, storeId), eq(carts.customerId, customerId))
+    );
+  } else if (effectiveSessionId) {
+    cartQuery = db.select().from(carts).where(
+      and(eq(carts.storeId, storeId), eq(carts.sessionId, effectiveSessionId))
+    );
+  } else {
+    cartQuery = db.select().from(carts).where(eq(carts.storeId, storeId));
+  }
+
+  let cartArr = await cartQuery.limit(1);
+  let cart = cartArr[0];
+
+  if (!cart) {
+    const newCart = await db.insert(carts).values({
+      storeId,
+      customerId,
+      sessionId: effectiveSessionId || generateSessionId(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
+    }).returning();
+    cart = newCart[0];
+  }
+
+  return { cart, sessionId: effectiveSessionId || cart.sessionId };
+}
+
+// Add item schema
+const addItemSchema = z.object({
+  storeId: z.string().uuid(),
+  productId: z.string().uuid(),
+  quantity: z.number().int().min(1).max(99),
+  modifiers: z.array(z.object({
+    groupId: z.string().uuid().optional(),
+    groupName: z.string().optional(),
+    optionId: z.string().uuid().optional(),
+    optionName: z.string().optional(),
+    priceAdjustment: z.number().optional(),
+  })).optional(),
+});
+
+// Update item schema
+const updateItemSchema = z.object({
+  quantity: z.number().int().min(0).max(99),
+});
+
+// Apply coupon schema
+const applyCouponSchema = z.object({
+  storeId: z.string().uuid(),
+  couponCode: z.string().min(1).max(50),
+});
 
 export default async function cartRoutes(fastify: FastifyInstance) {
   // Get or create cart
   fastify.get('/', async (request, reply) => {
     const query = request.query as Record<string, string>;
     const storeId = query.storeId;
-    let sessionId = request.cookies?.cart_session_id;
-    let customerId: string | null = null;
 
-    // Validate storeId
     if (!storeId) {
       return reply.status(400).send({ error: 'storeId is required' });
     }
 
-    // Check if customer is logged in (from JWT)
-    try {
-      await request.jwtVerify();
-      const user = request.user as { customerId?: string };
-      customerId = user?.customerId || null;
-    } catch {
-      // Not logged in, use session
-    }
+    const { sessionId, customerId } = getCartIdentifier(request);
 
     if (!sessionId && !customerId) {
-      sessionId = generateSessionId();
-      reply.setCookie('cart_session_id', sessionId, {
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-      });
+      // Will create a new session in findOrCreateCart
     }
 
     try {
-      // Find existing cart
-      let cartQuery;
-
-      if (customerId) {
-        cartQuery = db.select().from(carts).where(
-          and(eq(carts.storeId, storeId), eq(carts.customerId, customerId))
-        );
-      } else if (sessionId) {
-        cartQuery = db.select().from(carts).where(
-          and(eq(carts.storeId, storeId), eq(carts.sessionId, sessionId))
-        );
-      } else {
-        // Should not happen, but handle gracefully
-        cartQuery = db.select().from(carts).where(eq(carts.storeId, storeId));
-      }
-
-      let cartArr = await cartQuery.limit(1);
-      let cart = cartArr[0];
-
-      // Create new cart if not found
-      if (!cart) {
-        const newCart = await db.insert(carts).values({
-          storeId,
-          customerId,
-          sessionId: sessionId || generateSessionId(),
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
-        }).returning();
-        cart = newCart[0];
-      }
+      const { cart } = await findOrCreateCart(storeId, sessionId, customerId, reply);
 
       // Get cart items with product details
       const items = await db.select({
@@ -103,27 +149,13 @@ export default async function cartRoutes(fastify: FastifyInstance) {
 
   // Add item to cart
   fastify.post('/items', async (request, reply) => {
-    const { storeId, productId, quantity, modifiers } = request.body as any;
-    let sessionId = request.cookies?.cart_session_id;
-    let customerId = null;
-
-    try {
-      await request.jwtVerify();
-      const user = request.user as { customerId?: string };
-      customerId = user?.customerId || null;
-    } catch {
-      // Not logged in
+    const parsed = addItemSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request data', details: parsed.error.format() });
     }
 
-    if (!sessionId && !customerId) {
-      sessionId = generateSessionId();
-      reply.setCookie('cart_session_id', sessionId, {
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 60 * 60 * 24 * 30,
-      });
-    }
+    const { storeId, productId, quantity, modifiers } = parsed.data;
+    const { sessionId, customerId } = getCartIdentifier(request);
 
     try {
       // Get product details
@@ -146,35 +178,14 @@ export default async function cartRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Insufficient stock' });
       }
 
-      // Find or create cart
-      let cartQuery = db.select().from(carts).where(eq(carts.storeId, storeId));
+      const { cart } = await findOrCreateCart(storeId, sessionId, customerId, reply);
 
-      if (customerId) {
-        cartQuery = db.select().from(carts).where(
-          and(eq(carts.storeId, storeId), eq(carts.customerId, customerId))
-        );
-      } else if (sessionId) {
-        cartQuery = db.select().from(carts).where(
-          and(eq(carts.storeId, storeId), eq(carts.sessionId, sessionId))
-        );
-      } else {
-        return reply.status(400).send({ error: 'Session required' });
-      }
+      // Calculate price
+      const price = Number(product.salePrice);
+      const modifiersTotal = modifiers?.reduce((sum, mod) => sum + Number(mod.priceAdjustment || 0), 0) || 0;
+      const unitPrice = price + modifiersTotal;
 
-      let cartArr = await cartQuery.limit(1);
-      let cart = cartArr[0];
-
-      if (!cart) {
-        const newCart = await db.insert(carts).values({
-          storeId,
-          customerId,
-          sessionId: sessionId || generateSessionId(),
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
-        }).returning();
-        cart = newCart[0];
-      }
-
-      // Check if item already exists
+      // Upsert: check if item already exists in this cart
       const existingItem = await db.select()
         .from(cartItems)
         .where(and(
@@ -183,19 +194,15 @@ export default async function cartRoutes(fastify: FastifyInstance) {
         ))
         .limit(1);
 
-      const price = Number(product.salePrice);
-      const modifiersTotal = modifiers?.reduce((sum: number, mod: any) => sum + Number(mod.priceAdjustment || 0), 0) || 0;
-      const unitPrice = price + modifiersTotal;
-      const total = unitPrice * quantity;
-
       if (existingItem.length > 0) {
-        // Update quantity
+        // Update quantity (add to existing)
         const newQuantity = existingItem[0].quantity + quantity;
         await db.update(cartItems)
           .set({
             quantity: newQuantity,
             total: (unitPrice * newQuantity).toString(),
             modifiers: modifiers || existingItem[0].modifiers,
+            updatedAt: new Date(),
           })
           .where(eq(cartItems.id, existingItem[0].id));
       } else {
@@ -205,12 +212,12 @@ export default async function cartRoutes(fastify: FastifyInstance) {
           productId,
           quantity,
           price: unitPrice.toString(),
-          total: total.toString(),
+          total: (unitPrice * quantity).toString(),
           modifiers: modifiers || [],
         });
       }
 
-      // Update cart totals
+      // Update cart totals (preserves couponDiscount)
       await updateCartTotals(cart.id);
 
       return reply.send({ message: 'Item added to cart' });
@@ -223,7 +230,12 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   // Update cart item quantity
   fastify.put('/items/:itemId', async (request, reply) => {
     const { itemId } = request.params as { itemId: string };
-    const { quantity } = request.body as { quantity: number };
+    const parsed = updateItemSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request data', details: parsed.error.format() });
+    }
+
+    const { quantity } = parsed.data;
 
     try {
       const itemArr = await db.select()
@@ -236,18 +248,38 @@ export default async function cartRoutes(fastify: FastifyInstance) {
       }
 
       const item = itemArr[0];
-      const unitPrice = Number(item.price);
-      const total = unitPrice * quantity;
+
+      // Authorization: verify the cart item belongs to a cart the user owns
+      const cartArr = await db.select()
+        .from(carts)
+        .where(eq(carts.id, item.cartId))
+        .limit(1);
+
+      if (cartArr.length === 0) {
+        return reply.status(404).send({ error: 'Cart not found' });
+      }
+
+      // Verify cart ownership (session or customer)
+      const { sessionId, customerId } = getCartIdentifier(request);
+      const cart = cartArr[0];
+      const isOwner = (customerId && cart.customerId === customerId) ||
+                      (!customerId && sessionId && cart.sessionId === sessionId);
+
+      if (!isOwner) {
+        return reply.status(403).send({ error: 'You do not have permission to modify this cart' });
+      }
 
       if (quantity <= 0) {
         await db.delete(cartItems).where(eq(cartItems.id, itemId));
       } else {
+        const unitPrice = Number(item.price);
+        const total = unitPrice * quantity;
         await db.update(cartItems)
-          .set({ quantity, total: total.toString() })
+          .set({ quantity, total: total.toString(), updatedAt: new Date() })
           .where(eq(cartItems.id, itemId));
       }
 
-      // Update cart totals
+      // Update cart totals (preserves couponDiscount)
       await updateCartTotals(item.cartId);
 
       return reply.send({ message: 'Cart updated' });
@@ -271,12 +303,31 @@ export default async function cartRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Item not found' });
       }
 
-      const cartId = itemArr[0].cartId;
+      const item = itemArr[0];
+
+      // Authorization: verify the cart item belongs to a cart the user owns
+      const cartArr = await db.select()
+        .from(carts)
+        .where(eq(carts.id, item.cartId))
+        .limit(1);
+
+      if (cartArr.length === 0) {
+        return reply.status(404).send({ error: 'Cart not found' });
+      }
+
+      const { sessionId, customerId } = getCartIdentifier(request);
+      const cart = cartArr[0];
+      const isOwner = (customerId && cart.customerId === customerId) ||
+                      (!customerId && sessionId && cart.sessionId === sessionId);
+
+      if (!isOwner) {
+        return reply.status(403).send({ error: 'You do not have permission to modify this cart' });
+      }
 
       await db.delete(cartItems).where(eq(cartItems.id, itemId));
 
-      // Update cart totals
-      await updateCartTotals(cartId);
+      // Update cart totals (preserves couponDiscount)
+      await updateCartTotals(item.cartId);
 
       return reply.send({ message: 'Item removed' });
     } catch (error) {
@@ -287,17 +338,13 @@ export default async function cartRoutes(fastify: FastifyInstance) {
 
   // Apply coupon
   fastify.post('/coupon', async (request, reply) => {
-    const { storeId, couponCode } = request.body as any;
-    let sessionId = request.cookies?.cart_session_id;
-    let customerId = null;
-
-    try {
-      await request.jwtVerify();
-      const user = request.user as { customerId?: string };
-      customerId = user?.customerId || null;
-    } catch {
-      // Not logged in
+    const parsed = applyCouponSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request data', details: parsed.error.format() });
     }
+
+    const { storeId, couponCode } = parsed.data;
+    const { sessionId, customerId } = getCartIdentifier(request);
 
     try {
       // Validate coupon
@@ -331,8 +378,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
       }
 
       // Find cart
-      let cartQuery = db.select().from(carts).where(eq(carts.storeId, storeId));
-
+      let cartQuery;
       if (customerId) {
         cartQuery = db.select().from(carts).where(
           and(eq(carts.storeId, storeId), eq(carts.customerId, customerId))
@@ -368,15 +414,16 @@ export default async function cartRoutes(fastify: FastifyInstance) {
           discount = Number(coupon.maxDiscountAmount);
         }
       } else if (coupon.type === 'fixed_amount') {
-        discount = Number(coupon.value);
+        discount = Math.min(Number(coupon.value), Number(cart.subtotal));
       }
 
-      // Apply coupon
+      // Apply coupon — update total = subtotal - discount
       await db.update(carts)
         .set({
           couponCode: coupon.code,
           couponDiscount: discount.toString(),
           total: (Number(cart.subtotal) - discount).toString(),
+          updatedAt: new Date(),
         })
         .where(eq(carts.id, cart.id));
 
@@ -397,15 +444,10 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   fastify.delete('/', async (request, reply) => {
     const query = request.query as Record<string, string>;
     const storeId = query.storeId;
-    let sessionId = request.cookies?.cart_session_id;
-    let customerId: string | null = null;
+    const { sessionId, customerId } = getCartIdentifier(request);
 
-    try {
-      await request.jwtVerify();
-      const user = request.user as { customerId?: string };
-      customerId = user?.customerId || null;
-    } catch {
-      // Not logged in
+    if (!storeId) {
+      return reply.status(400).send({ error: 'storeId is required' });
     }
 
     try {
@@ -436,6 +478,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   });
 }
 
+// Fix 2.4: Preserve couponDiscount when updating cart totals
 async function updateCartTotals(cartId: string) {
   const items = await db.select()
     .from(cartItems)
@@ -444,10 +487,22 @@ async function updateCartTotals(cartId: string) {
   const subtotal = items.reduce((sum, item) => sum + Number(item.total), 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Fetch existing cart to preserve couponDiscount
+  const cartArr = await db.select()
+    .from(carts)
+    .where(eq(carts.id, cartId))
+    .limit(1);
+
+  if (cartArr.length === 0) return;
+
+  const cart = cartArr[0];
+  const couponDiscount = Number(cart.couponDiscount || 0);
+  const total = Math.max(0, subtotal - couponDiscount);
+
   await db.update(carts)
     .set({
       subtotal: subtotal.toString(),
-      total: subtotal.toString(),
+      total: total.toString(),
       itemCount,
       updatedAt: new Date(),
     })

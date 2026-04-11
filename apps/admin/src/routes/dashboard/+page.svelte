@@ -41,6 +41,9 @@
     // Recent activity data
     let recentActivity = $state([] as Array<{ id: number; action: string; detail: string; time: string; type: string }>);
 
+    // Chart period state
+    let chartPeriod = $state('7d');
+
     onMount(async () => {
         const token = localStorage.getItem('merchant_token');
         if (!token) {
@@ -81,7 +84,7 @@
 
             if (ordersRes.ok) {
                 const ordersData = await ordersRes.json();
-                stats.totalOrders = Number(ordersData.data?.total_orders || 0);
+                stats.totalOrders = Number(ordersData.data?.totalOrders || 0);
                 stats.totalRevenue = Number(ordersData.data?.revenue || 0);
             }
 
@@ -95,8 +98,8 @@
                 stats.totalCustomers = customersData.pagination?.total || 0;
             }
 
-            // Fetch chart data (last 7 days)
-            const chartRes = await fetch(`${API_BASE_URL}/api/analytics/sales-chart?period=7d`, {
+            // Fetch chart data
+            const chartRes = await fetch(`${API_BASE_URL}/api/analytics/sales-chart?period=${chartPeriod}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -115,7 +118,7 @@
                 recentActivity = activityData.data?.map((order: any) => ({
                     id: order.id,
                     action: `Order #${order.orderNumber || order.id.slice(0, 8)}`,
-                    detail: `${order.customerName || 'Guest'} • ${order.totalAmount ? formatCurrency(order.totalAmount) : '$0.00'}`,
+                    detail: `${order.customerName || 'Guest'} • ${order.total ? formatCurrency(order.total) : '$0.00'}`,
                     time: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
                     type: order.status === 'completed' ? 'success' : order.status === 'pending' ? 'warning' : 'info'
                 })) || [];
@@ -269,8 +272,8 @@
                     Revenue Trend
                 </h3>
                 <div style="display: flex; gap: 4px;">
-                    {#each ['1H', '24H', '7D', '30D'] as range}
-                        <button class="page-btn {range === '24H' ? 'active' : ''}">{range}</button>
+                    {#each [['1H', '1h'], ['24H', '24h'], ['7D', '7d'], ['30D', '30d']] as [label, value]}
+                        <button class="page-btn {chartPeriod === value ? 'active' : ''}" onclick={() => { chartPeriod = value; fetchDashboardData(localStorage.getItem('merchant_token') || ''); }}>{label}</button>
                     {/each}
                 </div>
             </div>

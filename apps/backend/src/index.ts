@@ -94,8 +94,11 @@ await fastify.register(cors, {
 });
 
 // Cookie support for cart sessions
+if (process.env.NODE_ENV === 'production' && !process.env.COOKIE_SECRET) {
+  throw new Error('COOKIE_SECRET environment variable is required in production');
+}
 await fastify.register(cookie, {
-  secret: process.env.COOKIE_SECRET || 'my-secret-cookie-key-change-in-production',
+  secret: process.env.COOKIE_SECRET || 'dev-only-insecure-cookie-secret',
   parseOptions: {}
 });
 

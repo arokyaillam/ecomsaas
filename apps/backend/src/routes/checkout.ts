@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { db, orders, orderItems, carts, cartItems, products, customers, coupons, customerAddresses } from '../db/index.js';
+import { db, orders, orderItems, carts, cartItems, products, customers, coupons, stores } from '../db/index.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import { z } from 'zod';
 
 // Generate unique order number
 const generateOrderNumber = () => {
@@ -9,9 +10,41 @@ const generateOrderNumber = () => {
   return `ORD-${timestamp}-${random}`;
 };
 
+// Validation schemas
+const shippingAddressSchema = z.object({
+  name: z.string().optional(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  addressLine1: z.string().min(1),
+  addressLine2: z.string().optional(),
+  city: z.string().min(1),
+  state: z.string().optional(),
+  country: z.string().min(1),
+  postalCode: z.string().min(1),
+  phone: z.string().optional(),
+});
+
+const checkoutSchema = z.object({
+  storeId: z.string().uuid(),
+  cartId: z.string().uuid(),
+  customerId: z.string().uuid().optional(),
+  email: z.string().email(),
+  phone: z.string().optional(),
+  shippingAddress: shippingAddressSchema,
+  billingAddress: shippingAddressSchema.optional(),
+  shippingMethod: z.enum(['standard', 'express', 'overnight']).default('standard'),
+  paymentMethod: z.enum(['card', 'cash_on_delivery', 'bank_transfer']).default('card'),
+  notes: z.string().optional(),
+});
+
 export default async function checkoutRoutes(fastify: FastifyInstance) {
   // Create checkout session
   fastify.post('/create', async (request, reply) => {
+    const parsed = checkoutSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid checkout data', details: parsed.error.format() });
+    }
+
     const {
       storeId,
       cartId,
@@ -23,9 +56,20 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
       shippingMethod,
       paymentMethod,
       notes,
-    } = request.body as any;
+    } = parsed.data;
 
     try {
+      // Verify store exists
+      const storeArr = await db.select({ id: stores.id, currency: stores.currency })
+        .from(stores)
+        .where(eq(stores.id, storeId))
+        .limit(1);
+
+      if (storeArr.length === 0) {
+        return reply.status(404).send({ error: 'Store not found' });
+      }
+      const storeCurrency = storeArr[0].currency || 'USD';
+
       // Get cart items
       const items = await db.select({
         item: cartItems,
@@ -37,6 +81,13 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
 
       if (items.length === 0) {
         return reply.status(400).send({ error: 'Cart is empty' });
+      }
+
+      // Verify all products belong to the same store
+      for (const { product } of items) {
+        if (product.storeId !== storeId) {
+          return reply.status(400).send({ error: 'Cart contains products from a different store' });
+        }
       }
 
       // Validate stock
@@ -59,99 +110,105 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
       const subtotal = Number(cart.subtotal);
       const couponDiscount = Number(cart.couponDiscount || 0);
       const shipping = calculateShipping(shippingMethod, subtotal);
-      const tax = calculateTax(subtotal - couponDiscount, shippingAddress?.country);
+      const tax = calculateTax(subtotal - couponDiscount, shippingAddress.country);
       const total = subtotal - couponDiscount + shipping + tax;
 
-      // Create order
-      const orderData = {
-        storeId,
-        customerId: customerId || null,
-        orderNumber: generateOrderNumber(),
-        email,
-        phone,
-        currency: 'USD', // Get from store settings
-        subtotal: subtotal.toString(),
-        tax: tax.toString(),
-        shipping: shipping.toString(),
-        discount: couponDiscount.toString(),
-        total: total.toString(),
-        // Shipping address
-        shippingName: shippingAddress?.name,
-        shippingFirstName: shippingAddress?.firstName,
-        shippingLastName: shippingAddress?.lastName,
-        shippingAddressLine1: shippingAddress?.addressLine1,
-        shippingAddressLine2: shippingAddress?.addressLine2,
-        shippingCity: shippingAddress?.city,
-        shippingState: shippingAddress?.state,
-        shippingCountry: shippingAddress?.country,
-        shippingPostalCode: shippingAddress?.postalCode,
-        // Billing address
-        billingName: billingAddress?.name || shippingAddress?.name,
-        billingFirstName: billingAddress?.firstName || shippingAddress?.firstName,
-        billingLastName: billingAddress?.lastName || shippingAddress?.lastName,
-        billingAddressLine1: billingAddress?.addressLine1 || shippingAddress?.addressLine1,
-        billingAddressLine2: billingAddress?.addressLine2 || shippingAddress?.addressLine2,
-        billingCity: billingAddress?.city || shippingAddress?.city,
-        billingState: billingAddress?.state || shippingAddress?.state,
-        billingCountry: billingAddress?.country || shippingAddress?.country,
-        billingPostalCode: billingAddress?.postalCode || shippingAddress?.postalCode,
-        // Payment & Shipping
-        paymentMethod,
-        shippingMethod,
-        couponCode: cart.couponCode,
-        notes,
-        status: 'pending',
-        paymentStatus: 'pending',
-        fulfillmentStatus: 'unfulfilled',
-      };
-
-      const newOrder = await db.insert(orders).values(orderData).returning();
-      const order = newOrder[0];
-
-      // Create order items
-      for (const { item, product } of items) {
-        await db.insert(orderItems).values({
-          orderId: order.id,
+      // Create order and decrement stock in a transaction
+      const result = await db.transaction(async (tx) => {
+        const orderData = {
           storeId,
-          productId: product.id,
-          productTitle: product.titleEn,
-          productImage: product.images?.split(',')[0] || null,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.total,
-          modifiers: item.modifiers,
-        } as any);
+          customerId: customerId || null,
+          orderNumber: generateOrderNumber(),
+          email,
+          phone: phone || null,
+          currency: storeCurrency,
+          subtotal: subtotal.toString(),
+          tax: tax.toString(),
+          shipping: shipping.toString(),
+          discount: couponDiscount.toString(),
+          total: total.toString(),
+          // Shipping address
+          shippingName: shippingAddress.name || null,
+          shippingFirstName: shippingAddress.firstName,
+          shippingLastName: shippingAddress.lastName,
+          shippingAddressLine1: shippingAddress.addressLine1,
+          shippingAddressLine2: shippingAddress.addressLine2 || null,
+          shippingCity: shippingAddress.city,
+          shippingState: shippingAddress.state || null,
+          shippingCountry: shippingAddress.country,
+          shippingPostalCode: shippingAddress.postalCode,
+          // Billing address
+          billingName: billingAddress?.name || shippingAddress.name || null,
+          billingFirstName: billingAddress?.firstName || shippingAddress.firstName,
+          billingLastName: billingAddress?.lastName || shippingAddress.lastName,
+          billingAddressLine1: billingAddress?.addressLine1 || shippingAddress.addressLine1,
+          billingAddressLine2: billingAddress?.addressLine2 || shippingAddress.addressLine2 || null,
+          billingCity: billingAddress?.city || shippingAddress.city,
+          billingState: billingAddress?.state || shippingAddress.state || null,
+          billingCountry: billingAddress?.country || shippingAddress.country,
+          billingPostalCode: billingAddress?.postalCode || shippingAddress.postalCode,
+          // Payment & Shipping
+          paymentMethod,
+          shippingMethod,
+          couponCode: cart.couponCode || null,
+          couponId: cart.couponCode ? undefined : undefined, // Will be looked up if needed
+          notes: notes || null,
+          status: 'pending',
+          paymentStatus: 'pending',
+          fulfillmentStatus: 'unfulfilled',
+        };
 
-        // Decrease stock
-        await db.update(products)
-          .set({
-            currentQuantity: sql`${products.currentQuantity} - ${item.quantity}`,
-          })
-          .where(eq(products.id, product.id));
-      }
+        const newOrder = await tx.insert(orders).values(orderData).returning();
+        const order = newOrder[0];
 
-      // Update coupon usage
-      if (cart.couponCode) {
-        await db.update(coupons)
-          .set({
-            usageCount: sql`${coupons.usageCount} + 1`,
-          })
-          .where(and(
-            eq(coupons.storeId, storeId),
-            eq(coupons.code, cart.couponCode)
-          ));
-      }
+        // Create order items and decrement stock
+        for (const { item, product } of items) {
+          await tx.insert(orderItems).values({
+            orderId: order.id,
+            storeId,
+            productId: product.id,
+            productTitle: product.titleEn,
+            productImage: product.images?.split(',')[0] || null,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            modifiers: item.modifiers,
+          });
 
-      // Clear cart
-      await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
-      await db.delete(carts).where(eq(carts.id, cartId));
+          // Decrease stock with a check to prevent negative
+          await tx.update(products)
+            .set({
+              currentQuantity: sql`GREATEST(${products.currentQuantity} - ${item.quantity}, 0)`,
+              updatedAt: new Date(),
+            })
+            .where(eq(products.id, product.id));
+        }
+
+        // Update coupon usage
+        if (cart.couponCode) {
+          await tx.update(coupons)
+            .set({
+              usageCount: sql`${coupons.usageCount} + 1`,
+            })
+            .where(and(
+              eq(coupons.storeId, storeId),
+              eq(coupons.code, cart.couponCode)
+            ));
+        }
+
+        // Clear cart items
+        await tx.delete(cartItems).where(eq(cartItems.cartId, cartId));
+        await tx.delete(carts).where(eq(carts.id, cartId));
+
+        return order;
+      });
 
       return reply.send({
         data: {
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          total: order.total,
-          status: order.status,
+          orderId: result.id,
+          orderNumber: result.orderNumber,
+          total: result.total,
+          status: result.status,
         },
       });
     } catch (error) {
@@ -191,12 +248,32 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
     return reply.send({ data: options });
   });
 
-  // Payment intent (Stripe integration placeholder)
+  // Payment intent (DEVELOPMENT ONLY — Replace with Stripe integration for production)
   fastify.post('/payment-intent', async (request, reply) => {
-    const { orderId, paymentMethod } = request.body as any;
+    if (process.env.NODE_ENV === 'production') {
+      return reply.status(501).send({
+        error: 'Payment integration not configured. Please integrate Stripe or another payment provider.',
+      });
+    }
+
+    const paymentIntentSchema = z.object({
+      orderId: z.string().uuid(),
+      paymentMethod: z.string().optional(),
+    });
+
+    const parsed = paymentIntentSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: parsed.error.format() });
+    }
+
+    const { orderId } = parsed.data;
 
     try {
-      const orderArr = await db.select()
+      const orderArr = await db.select({
+        id: orders.id,
+        total: orders.total,
+        currency: orders.currency,
+      })
         .from(orders)
         .where(eq(orders.id, orderId))
         .limit(1);
@@ -207,15 +284,18 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
 
       const order = orderArr[0];
 
-      // Here you would create a Stripe PaymentIntent
-      // For now, we'll simulate success
-      const clientSecret = `pi_${Date.now()}_secret_${Math.random().toString(36).substring(2)}`;
+      // DEVELOPMENT ONLY: Simulated payment intent
+      // TODO: Replace with actual Stripe PaymentIntent creation
+      fastify.log.warn('⚠️ Using simulated payment intent. Replace with Stripe for production.');
+
+      const clientSecret = `pi_dev_${Date.now()}_secret_${Math.random().toString(36).substring(2)}`;
 
       return reply.send({
         data: {
           clientSecret,
           amount: order.total,
           currency: order.currency?.toLowerCase() || 'usd',
+          isDemo: true,
         },
       });
     } catch (error) {
@@ -224,26 +304,52 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Confirm payment
+  // Confirm payment (DEVELOPMENT ONLY — Replace with Stripe webhook for production)
   fastify.post('/confirm-payment', async (request, reply) => {
-    const { orderId, paymentIntentId } = request.body as any;
+    if (process.env.NODE_ENV === 'production') {
+      return reply.status(501).send({
+        error: 'Payment confirmation not configured. Use Stripe webhooks for production.',
+      });
+    }
+
+    const confirmSchema = z.object({
+      orderId: z.string().uuid(),
+      paymentIntentId: z.string().min(1),
+    });
+
+    const parsed = confirmSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: parsed.error.format() });
+    }
+
+    const { orderId, paymentIntentId } = parsed.data;
 
     try {
-      // Verify payment with Stripe (placeholder)
-      // const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      // DEVELOPMENT ONLY: Simulated payment confirmation
+      // TODO: Replace with Stripe webhook signature verification
+      fastify.log.warn('⚠️ Using simulated payment confirmation. Replace with Stripe webhooks for production.');
 
-      // Update order status
-      await db.update(orders)
+      // Verify the payment intent ID starts with 'pi_dev_' (only allowed in development)
+      if (!paymentIntentId.startsWith('pi_dev_')) {
+        return reply.status(400).send({ error: 'Invalid payment intent' });
+      }
+
+      const updated = await db.update(orders)
         .set({
           paymentStatus: 'paid',
           status: 'confirmed',
           paymentIntentId,
           updatedAt: new Date(),
         })
-        .where(eq(orders.id, orderId));
+        .where(eq(orders.id, orderId))
+        .returning();
+
+      if (updated.length === 0) {
+        return reply.status(404).send({ error: 'Order not found' });
+      }
 
       return reply.send({
-        data: { message: 'Payment confirmed', orderId },
+        data: { message: 'Payment confirmed (development mode)', orderId },
       });
     } catch (error) {
       fastify.log.error(error);
@@ -266,8 +372,10 @@ function calculateShipping(method: string, subtotal: number): number {
   }
 }
 
+// TODO: Implement proper tax calculation service per region/jurisdiction
 function calculateTax(subtotal: number, country?: string): number {
-  // Simplified tax calculation
+  // Placeholder: flat 8% for US, 0% elsewhere
+  // In production, use a tax calculation service like TaxJar or Avalara
   const taxRate = country === 'US' ? 0.08 : 0;
   return subtotal * taxRate;
 }

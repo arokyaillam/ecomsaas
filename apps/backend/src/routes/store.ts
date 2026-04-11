@@ -2,6 +2,12 @@ import { FastifyInstance } from 'fastify';
 import { db, stores, products, categories, subcategories, modifierGroups, modifierOptions } from '../db/index.js';
 import { eq, and, asc, sql } from 'drizzle-orm';
 
+// Strip internal/sensitive fields from product before sending to storefront
+function stripProductForStorefront(product: any): any {
+  const { purchasePrice, barcode, ...publicFields } = product;
+  return publicFields;
+}
+
 // Public route - no auth required
 export default async function storeRoutes(fastify: FastifyInstance) {
 
@@ -180,10 +186,10 @@ export default async function storeRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Clean up temporary maps
+      // Clean up temporary maps and strip sensitive fields
       const productsWithModifiers = Array.from(productMap.values()).map(p => {
         const { groupMap, ...product } = p;
-        return product;
+        return stripProductForStorefront(product);
       });
 
       fastify.log.info(`Found ${productsWithModifiers.length} products (total: ${totalCount})`);
@@ -266,7 +272,7 @@ export default async function storeRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         data: {
-          ...product,
+          ...stripProductForStorefront(product),
           modifierGroups: groupsWithOptions
         }
       });

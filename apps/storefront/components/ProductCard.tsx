@@ -123,7 +123,7 @@ export function ProductCard({ product, theme, currency, store }: ProductCardProp
             </span>
             {hasDiscount && (
               <span className="font-mono text-sm text-[var(--text-muted)] line-through">
-                {storeCurrency} {formatPrice(product.price || product.salePrice)}
+                {storeCurrency} {formatPrice(product.regularPrice || product.salePrice)}
               </span>
             )}
           </div>

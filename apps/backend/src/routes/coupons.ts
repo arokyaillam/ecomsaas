@@ -1,6 +1,43 @@
 import { FastifyInstance } from 'fastify';
 import { db, coupons, orders } from '../db/index.js';
 import { eq, and, desc, count, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { requireAuth } from '../middleware/auth.js';
+
+// Validation schemas
+const createCouponSchema = z.object({
+  code: z.string().min(1).max(50),
+  type: z.enum(['percentage', 'fixed_amount', 'free_shipping']),
+  value: z.coerce.number().min(0),
+  description: z.string().max(500).optional(),
+  minOrderAmount: z.coerce.number().min(0).optional().nullable(),
+  maxDiscountAmount: z.coerce.number().min(0).optional().nullable(),
+  usageLimit: z.coerce.number().int().min(0).optional().nullable(),
+  usageLimitPerCustomer: z.coerce.number().int().min(0).optional().default(1),
+  isActive: z.boolean().optional().default(true),
+  startsAt: z.string().datetime().optional().nullable(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  appliesTo: z.enum(['all', 'products', 'categories']).optional().default('all'),
+  productIds: z.string().optional().nullable(),
+  categoryIds: z.string().optional().nullable(),
+  freeShipping: z.boolean().optional().default(false),
+});
+
+const updateCouponSchema = z.object({
+  description: z.string().max(500).optional(),
+  value: z.coerce.number().min(0).optional(),
+  minOrderAmount: z.coerce.number().min(0).optional().nullable(),
+  maxDiscountAmount: z.coerce.number().min(0).optional().nullable(),
+  usageLimit: z.coerce.number().int().min(0).optional().nullable(),
+  usageLimitPerCustomer: z.coerce.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+  startsAt: z.string().datetime().optional().nullable(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  appliesTo: z.enum(['all', 'products', 'categories']).optional(),
+  productIds: z.string().optional().nullable(),
+  categoryIds: z.string().optional().nullable(),
+  freeShipping: z.boolean().optional(),
+});
 
 export default async function couponRoutes(fastify: FastifyInstance) {
   // ========== PUBLIC ROUTES ==========
@@ -76,17 +113,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
 
   // Get all coupons
   fastify.get('/admin', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { storeId: string };
     const { page = '1', limit = '20', status } = request.query as any;
@@ -139,17 +166,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
 
   // Get coupon by ID
   fastify.get('/admin/:couponId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { couponId } = request.params as { couponId: string };
     const user = request.user as { storeId: string };
@@ -176,20 +193,15 @@ export default async function couponRoutes(fastify: FastifyInstance) {
 
   // Create coupon
   fastify.post('/admin', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const user = request.user as { storeId: string };
-    const couponData = request.body as any;
+    const parsed = createCouponSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid coupon data', details: parsed.error.format() });
+    }
+
+    const couponData = parsed.data;
 
     try {
       // Check if code already exists
@@ -206,9 +218,22 @@ export default async function couponRoutes(fastify: FastifyInstance) {
       }
 
       const newCoupon = await db.insert(coupons).values({
-        ...couponData,
         storeId: user.storeId,
         code: couponData.code.toUpperCase(),
+        type: couponData.type,
+        value: couponData.value.toString(),
+        description: couponData.description || null,
+        minOrderAmount: couponData.minOrderAmount?.toString() || null,
+        maxDiscountAmount: couponData.maxDiscountAmount?.toString() || null,
+        usageLimit: couponData.usageLimit || null,
+        usageLimitPerCustomer: couponData.usageLimitPerCustomer,
+        isActive: couponData.isActive,
+        startsAt: couponData.startsAt ? new Date(couponData.startsAt) : null,
+        expiresAt: couponData.expiresAt ? new Date(couponData.expiresAt) : null,
+        appliesTo: couponData.appliesTo,
+        productIds: couponData.productIds || null,
+        categoryIds: couponData.categoryIds || null,
+        freeShipping: couponData.freeShipping,
         usageCount: 0,
       }).returning();
 
@@ -224,28 +249,36 @@ export default async function couponRoutes(fastify: FastifyInstance) {
 
   // Update coupon
   fastify.put('/admin/:couponId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { couponId } = request.params as { couponId: string };
     const user = request.user as { storeId: string };
-    const couponData = request.body as any;
+    const parsed = updateCouponSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid coupon data', details: parsed.error.format() });
+    }
+
+    const couponData = parsed.data;
 
     try {
+      const updateData: any = { updatedAt: new Date() };
+
+      if (couponData.description !== undefined) updateData.description = couponData.description;
+      if (couponData.value !== undefined) updateData.value = couponData.value.toString();
+      if (couponData.minOrderAmount !== undefined) updateData.minOrderAmount = couponData.minOrderAmount?.toString() || null;
+      if (couponData.maxDiscountAmount !== undefined) updateData.maxDiscountAmount = couponData.maxDiscountAmount?.toString() || null;
+      if (couponData.usageLimit !== undefined) updateData.usageLimit = couponData.usageLimit || null;
+      if (couponData.usageLimitPerCustomer !== undefined) updateData.usageLimitPerCustomer = couponData.usageLimitPerCustomer;
+      if (couponData.isActive !== undefined) updateData.isActive = couponData.isActive;
+      if (couponData.startsAt !== undefined) updateData.startsAt = couponData.startsAt ? new Date(couponData.startsAt) : null;
+      if (couponData.expiresAt !== undefined) updateData.expiresAt = couponData.expiresAt ? new Date(couponData.expiresAt) : null;
+      if (couponData.appliesTo !== undefined) updateData.appliesTo = couponData.appliesTo;
+      if (couponData.productIds !== undefined) updateData.productIds = couponData.productIds || null;
+      if (couponData.categoryIds !== undefined) updateData.categoryIds = couponData.categoryIds || null;
+      if (couponData.freeShipping !== undefined) updateData.freeShipping = couponData.freeShipping;
+
       await db.update(coupons)
-        .set({
-          ...couponData,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(and(
           eq(coupons.id, couponId),
           eq(coupons.storeId, user.storeId)
@@ -260,17 +293,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
 
   // Delete coupon
   fastify.delete('/admin/:couponId', {
-    preHandler: async (request, reply) => {
-      try {
-        await request.jwtVerify();
-        const user = request.user as { storeId?: string };
-        if (!user?.storeId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-      } catch {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-    },
+    preHandler: [requireAuth],
   }, async (request, reply) => {
     const { couponId } = request.params as { couponId: string };
     const user = request.user as { storeId: string };
