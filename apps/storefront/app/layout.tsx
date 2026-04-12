@@ -100,7 +100,6 @@ export default async function RootLayout({
         <link href="https://api.fontshare.com/v2/css?f[]=space-mono@400,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
         <style>{`
           :root {
             --primary: ${safeTheme.primaryColor};
@@ -121,13 +120,70 @@ export default async function RootLayout({
             font-family: var(--font-family), system-ui, sans-serif;
           }
 
+          /* Smooth scroll behavior */
+          html {
+            scroll-behavior: smooth;
+          }
+
+          /* Reduced motion preference */
+          @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+              animation-duration: 0.01ms !important;
+              animation-iteration-count: 1 !important;
+              transition-duration: 0.01ms !important;
+              scroll-behavior: auto !important;
+            }
+          }
+
+          /* Custom selection */
+          ::selection {
+            background: var(--accent);
+            color: var(--bg-primary);
+          }
+
+          /* Focus visible for accessibility */
+          :focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+          }
+
+          /* Smooth scrollbar */
+          ::-webkit-scrollbar {
+            width: 10px;
+          }
+
+          ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+          }
+
+          ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 0;
+            border: 2px solid var(--bg-secondary);
+          }
+
+          ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+          }
+
+          /* Loading spinner */
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+
+          .animate-spin {
+            animation: spin 1s linear infinite;
+          }
+
           @keyframes slide-in-right {
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
           }
 
           .animate-slide-in-right {
-            animation: slide-in-right 0.3s ease-out;
+            animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           }
         `}</style>
       </head>

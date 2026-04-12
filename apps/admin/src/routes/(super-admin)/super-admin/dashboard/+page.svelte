@@ -88,6 +88,7 @@
     let showEditPlanModal = $state(false);
     let editingPlan = $state<Plan | null>(null);
 
+
     onMount(() => {
         const token = localStorage.getItem('super_admin_token');
         if (!token) {
@@ -261,6 +262,38 @@
     function openEditPlan(plan: Plan) {
         editingPlan = { ...plan };
         showEditPlanModal = true;
+    }
+
+    // Delete functions
+    async function deleteStore(merchant: Merchant) {
+        const confirmed = confirm(
+            `Delete Store: ${merchant.name}\n\n` +
+            `Domain: ${merchant.domain}\n` +
+            `Owner: ${merchant.ownerEmail}\n\n` +
+            `The store will be deactivated. All data is preserved and can be recovered by reactivating.\n\n` +
+            `Click OK to delete.`
+        );
+
+        if (!confirmed) return;
+
+        const token = localStorage.getItem('super_admin_token');
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/super-admin/stores/${merchant.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to delete store');
+            }
+
+            await loadMerchants();
+            await loadDashboard();
+            alert('Store deleted successfully!');
+        } catch (err: any) {
+            alert('Error: ' + err.message);
+        }
     }
 
     function logout() {
@@ -583,10 +616,13 @@
                                                     </button>
                                                 {/if}
                                                 {#if merchant.status !== 'deactivated'}
-                                                    <button class="icon-btn danger" title="Deactivate" onclick={() => updateMerchantStatus(merchant.id, 'deactivated')}>
+                                                    <button class="icon-btn warning" title="Deactivate" onclick={() => updateMerchantStatus(merchant.id, 'deactivated')}>
                                                         <XCircle size={18} />
                                                     </button>
                                                 {/if}
+                                                <button class="icon-btn danger" title="Delete Store" onclick={() => deleteStore(merchant)}>
+                                                    <Trash2 size={18} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -1718,5 +1754,139 @@
         .data-table td {
             padding: 12px;
         }
+    }
+
+    /* Delete Modal Styles */
+    .modal-danger {
+        border: 2px solid #ef4444;
+    }
+
+    .modal-header-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .modal-header-icon.warning {
+        background: rgba(245, 158, 11, 0.2);
+        border: 2px solid #f59e0b;
+    }
+
+    .modal-header-icon.danger {
+        background: rgba(239, 68, 68, 0.2);
+        border: 2px solid #ef4444;
+    }
+
+    .modal-header h3 {
+        text-align: center;
+        margin: 0;
+    }
+
+    .delete-confirmation {
+        text-align: center;
+    }
+
+    .delete-warning {
+        font-size: 1.1rem;
+        margin-bottom: 20px;
+        color: #f8fafc;
+    }
+
+    .delete-warning.danger-text {
+        color: #fca5a5;
+    }
+
+    .delete-details {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+        text-align: left;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #334155;
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        color: #94a3b8;
+        font-size: 0.875rem;
+    }
+
+    .detail-value {
+        color: #f8fafc;
+        font-weight: 500;
+    }
+
+    .detail-value.mono {
+        font-family: monospace;
+        font-size: 0.75rem;
+    }
+
+    .delete-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 8px;
+        padding: 12px 16px;
+        color: #fbbf24;
+        font-size: 0.875rem;
+    }
+
+    .delete-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 8px;
+        padding: 16px;
+        color: #fca5a5;
+    }
+
+    .delete-alert strong {
+        color: #ef4444;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .delete-alert span {
+        font-size: 0.875rem;
+    }
+
+    .modal-footer-danger {
+        border-top: 1px solid #334155;
+    }
+
+    .btn-warning {
+        background: #f59e0b;
+        color: #0f172a;
+    }
+
+    .btn-warning:hover {
+        background: #d97706;
+    }
+
+    .btn-danger {
+        background: #dc2626;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #b91c1c;
     }
 </style>

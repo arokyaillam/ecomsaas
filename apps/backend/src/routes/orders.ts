@@ -3,6 +3,7 @@ import { db, orders, orderItems, products, customers, activityLogs } from '../db
 import { eq, and, desc, sql, asc, gte } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { requireTenant } from '../middleware/tenant.js';
 
 // Validation schemas
 const orderStatusSchema = z.object({
@@ -24,21 +25,26 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   fastify.get('/customer', {
     preHandler: [requireAuth],
   }, async (request, reply) => {
-    const user = request.user as { customerId: string };
+    const user = request.user as { customerId: string; storeId: string };
     const customerId = user.customerId;
+    const tenantId = user.storeId; // Enforce tenant from JWT
     const { page = '1', limit = '10' } = request.query as any;
 
     try {
       const offset = (Number(page) - 1) * Number(limit);
 
+      // Query filtered by both customer AND tenant (security)
       const ordersList = await db.select()
         .from(orders)
-        .where(eq(orders.customerId, customerId))
+        .where(and(
+          eq(orders.customerId, customerId),
+          eq(orders.storeId, tenantId) // Tenant guard
+        ))
         .orderBy(desc(orders.createdAt))
         .limit(Number(limit))
         .offset(offset);
 
-      // Get items for each order
+      // Get items for each order (already scoped by tenant via order)
       const ordersWithItems = await Promise.all(
         ordersList.map(async (order) => {
           const items = await db.select()
@@ -50,7 +56,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
       const totalCount = await db.select({ count: sql`count(*)` })
         .from(orders)
-        .where(eq(orders.customerId, customerId));
+        .where(and(
+          eq(orders.customerId, customerId),
+          eq(orders.storeId, tenantId) // Tenant guard
+        ));
 
       return reply.send({
         data: ordersWithItems,
@@ -72,14 +81,17 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     preHandler: [requireAuth],
   }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
-    const user = request.user as { customerId: string };
+    const user = request.user as { customerId: string; storeId: string };
+    const tenantId = user.storeId; // Enforce tenant from JWT
 
     try {
+      // Query filtered by orderId, customerId AND tenant (security)
       const orderArr = await db.select()
         .from(orders)
         .where(and(
           eq(orders.id, orderId),
-          eq(orders.customerId, user.customerId)
+          eq(orders.customerId, user.customerId),
+          eq(orders.storeId, tenantId) // Tenant guard
         ))
         .limit(1);
 

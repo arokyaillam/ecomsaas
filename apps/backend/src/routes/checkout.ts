@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { db, orders, orderItems, carts, cartItems, products, customers, coupons, stores } from '../db/index.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireTenant } from '../middleware/tenant.js';
 
 // Generate unique order number
 const generateOrderNumber = () => {
@@ -38,8 +39,10 @@ const checkoutSchema = z.object({
 });
 
 export default async function checkoutRoutes(fastify: FastifyInstance) {
-  // Create checkout session
-  fastify.post('/create', async (request, reply) => {
+  // Create checkout session - protected by tenant middleware
+  fastify.post('/create', {
+    preHandler: [requireTenant],
+  }, async (request, reply) => {
     const parsed = checkoutSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Invalid checkout data', details: parsed.error.format() });
@@ -58,63 +61,74 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
       notes,
     } = parsed.data;
 
+    // Verify tenant matches store (security check)
+    const tenantId = (request as any).tenantId;
+    if (tenantId !== storeId) {
+      return reply.status(403).send({ error: 'Store access denied for this tenant' });
+    }
+
     try {
-      // Verify store exists
-      const storeArr = await db.select({ id: stores.id, currency: stores.currency })
-        .from(stores)
-        .where(eq(stores.id, storeId))
-        .limit(1);
-
-      if (storeArr.length === 0) {
-        return reply.status(404).send({ error: 'Store not found' });
-      }
-      const storeCurrency = storeArr[0].currency || 'USD';
-
-      // Get cart items
-      const items = await db.select({
-        item: cartItems,
-        product: products,
-      })
-      .from(cartItems)
-      .innerJoin(products, eq(cartItems.productId, products.id))
-      .where(eq(cartItems.cartId, cartId));
-
-      if (items.length === 0) {
-        return reply.status(400).send({ error: 'Cart is empty' });
-      }
-
-      // Verify all products belong to the same store
-      for (const { product } of items) {
-        if (product.storeId !== storeId) {
-          return reply.status(400).send({ error: 'Cart contains products from a different store' });
-        }
-      }
-
-      // Validate stock
-      for (const { item, product } of items) {
-        if (Number(product.currentQuantity) < item.quantity) {
-          return reply.status(400).send({
-            error: `Insufficient stock for ${product.titleEn}`,
-          });
-        }
-      }
-
-      // Get cart
-      const cartArr = await db.select().from(carts).where(eq(carts.id, cartId)).limit(1);
-      if (cartArr.length === 0) {
-        return reply.status(404).send({ error: 'Cart not found' });
-      }
-      const cart = cartArr[0];
-
-      // Calculate totals
-      const subtotal = Number(cart.subtotal);
-      const couponDiscount = Number(cart.couponDiscount || 0);
-      const shipping = calculateShipping(shippingMethod, subtotal);
-      const tax = calculateTax(subtotal - couponDiscount, shippingAddress.country);
-      const total = subtotal - couponDiscount + shipping + tax;
-
       // Create order and decrement stock in a transaction
+      // ALL database operations inside - they succeed or fail together
       const result = await db.transaction(async (tx) => {
+        // Verify store exists (inside transaction for consistency)
+        const storeArr = await tx.select({ id: stores.id, currency: stores.currency })
+          .from(stores)
+          .where(eq(stores.id, storeId))
+          .limit(1);
+
+        if (storeArr.length === 0) {
+          throw new Error('Store not found');
+        }
+        const storeCurrency = storeArr[0].currency || 'USD';
+
+        // Get cart items (inside transaction to prevent race conditions)
+        const items = await tx.select({
+          item: cartItems,
+          product: products,
+        })
+        .from(cartItems)
+        .innerJoin(products, eq(cartItems.productId, products.id))
+        .where(eq(cartItems.cartId, cartId));
+
+        if (items.length === 0) {
+          throw new Error('Cart is empty');
+        }
+
+        // Verify all products belong to the same store
+        for (const { product } of items) {
+          if (product.storeId !== storeId) {
+            throw new Error('Cart contains products from a different store');
+          }
+        }
+
+        // Validate stock inside transaction (prevents race conditions)
+        for (const { item, product } of items) {
+          // Re-fetch product stock inside transaction to ensure we have latest data
+          const [currentProduct] = await tx.select({ currentQuantity: products.currentQuantity })
+            .from(products)
+            .where(eq(products.id, product.id))
+            .for('update'); // Lock the row
+
+          if (!currentProduct || Number(currentProduct.currentQuantity) < item.quantity) {
+            throw new Error(`Insufficient stock for ${product.titleEn}`);
+          }
+        }
+
+        // Get cart (inside transaction)
+        const cartArr = await tx.select().from(carts).where(eq(carts.id, cartId)).limit(1);
+        if (cartArr.length === 0) {
+          throw new Error('Cart not found');
+        }
+        const cart = cartArr[0];
+
+        // Calculate totals
+        const subtotal = Number(cart.subtotal);
+        const couponDiscount = Number(cart.couponDiscount || 0);
+        const shipping = calculateShipping(shippingMethod, subtotal);
+        const tax = calculateTax(subtotal - couponDiscount, shippingAddress.country);
+        const total = subtotal - couponDiscount + shipping + tax;
+
         const orderData = {
           storeId,
           customerId: customerId || null,
@@ -175,10 +189,10 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
             modifiers: item.modifiers,
           });
 
-          // Decrease stock with a check to prevent negative
+          // Decrease stock (safe: already validated above with row lock)
           await tx.update(products)
             .set({
-              currentQuantity: sql`GREATEST(${products.currentQuantity} - ${item.quantity}, 0)`,
+              currentQuantity: sql`${products.currentQuantity} - ${item.quantity}`,
               updatedAt: new Date(),
             })
             .where(eq(products.id, product.id));
@@ -211,8 +225,26 @@ export default async function checkoutRoutes(fastify: FastifyInstance) {
           status: result.status,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
+
+      // Handle specific transaction errors
+      if (error.message === 'Store not found') {
+        return reply.status(404).send({ error: error.message });
+      }
+      if (error.message === 'Cart is empty') {
+        return reply.status(400).send({ error: error.message });
+      }
+      if (error.message === 'Cart contains products from a different store') {
+        return reply.status(400).send({ error: error.message });
+      }
+      if (error.message?.startsWith('Insufficient stock')) {
+        return reply.status(400).send({ error: error.message });
+      }
+      if (error.message === 'Cart not found') {
+        return reply.status(404).send({ error: error.message });
+      }
+
       return reply.status(500).send({ error: 'Failed to create order' });
     }
   });

@@ -365,6 +365,52 @@ export default async function storeRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
   });
+  // GET /api/store - List all active stores (Public)
+  fastify.get('/', {
+    config: { rateLimit: publicRateLimit }
+  }, async (request, reply) => {
+    const { page = '1', limit = '20' } = request.query as { page?: string; limit?: string };
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
+    const offset = (pageNum - 1) * limitNum;
+
+    try {
+      const countResult = await db.select({ count: sql<number>`count(*)` })
+        .from(stores)
+        .where(eq(stores.status, 'active'));
+      const totalCount = Number(countResult[0]?.count || 0);
+
+      const storesArr = await db.select({
+        id: stores.id,
+        name: stores.name,
+        domain: stores.domain,
+        currency: stores.currency,
+        language: stores.language,
+        status: stores.status,
+        logoUrl: stores.logoUrl,
+        primaryColor: stores.primaryColor,
+      })
+        .from(stores)
+        .where(eq(stores.status, 'active'))
+        .limit(limitNum)
+        .offset(offset);
+
+      return reply.send({
+        data: storesArr,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limitNum),
+        }
+      });
+    } catch (error: any) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
   // GET Store by ID (Public)
   fastify.get('/:storeId', {
     config: { rateLimit: publicRateLimit }

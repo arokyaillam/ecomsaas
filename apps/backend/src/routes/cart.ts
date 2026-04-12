@@ -7,16 +7,16 @@ import { z } from 'zod';
 const generateSessionId = () => `sess_${randomUUID().replace(/-/g, '')}`;
 
 // Helper: get cart identifier from request (session or customer)
-function getCartIdentifier(request: any): { sessionId: string | null; customerId: string | null } {
+async function getCartIdentifier(request: any): Promise<{ sessionId: string | null; customerId: string | null }> {
   let sessionId: string | null = request.cookies?.cart_session_id || null;
   let customerId: string | null = null;
 
   try {
-    request.jwtVerify();
+    await request.jwtVerify();
     const user = request.user as { customerId?: string };
     customerId = user?.customerId || null;
   } catch {
-    // Not logged in
+    // Not logged in - guest cart
   }
 
   return { sessionId, customerId };
@@ -106,7 +106,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'storeId is required' });
     }
 
-    const { sessionId, customerId } = getCartIdentifier(request);
+    const { sessionId, customerId } = await getCartIdentifier(request);
 
     if (!sessionId && !customerId) {
       // Will create a new session in findOrCreateCart
@@ -155,7 +155,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
     }
 
     const { storeId, productId, quantity, modifiers } = parsed.data;
-    const { sessionId, customerId } = getCartIdentifier(request);
+    const { sessionId, customerId } = await getCartIdentifier(request);
 
     try {
       // Get product details
@@ -260,7 +260,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
       }
 
       // Verify cart ownership (session or customer)
-      const { sessionId, customerId } = getCartIdentifier(request);
+      const { sessionId, customerId } = await getCartIdentifier(request);
       const cart = cartArr[0];
       const isOwner = (customerId && cart.customerId === customerId) ||
                       (!customerId && sessionId && cart.sessionId === sessionId);
@@ -315,7 +315,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Cart not found' });
       }
 
-      const { sessionId, customerId } = getCartIdentifier(request);
+      const { sessionId, customerId } = await getCartIdentifier(request);
       const cart = cartArr[0];
       const isOwner = (customerId && cart.customerId === customerId) ||
                       (!customerId && sessionId && cart.sessionId === sessionId);
@@ -344,7 +344,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
     }
 
     const { storeId, couponCode } = parsed.data;
-    const { sessionId, customerId } = getCartIdentifier(request);
+    const { sessionId, customerId } = await getCartIdentifier(request);
 
     try {
       // Validate coupon
@@ -444,7 +444,7 @@ export default async function cartRoutes(fastify: FastifyInstance) {
   fastify.delete('/', async (request, reply) => {
     const query = request.query as Record<string, string>;
     const storeId = query.storeId;
-    const { sessionId, customerId } = getCartIdentifier(request);
+    const { sessionId, customerId } = await getCartIdentifier(request);
 
     if (!storeId) {
       return reply.status(400).send({ error: 'storeId is required' });

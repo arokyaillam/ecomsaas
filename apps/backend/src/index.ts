@@ -26,6 +26,7 @@ import couponRoutes from './routes/coupons.js';
 import wishlistRoutes from './routes/wishlist.js';
 import analyticsRoutes from './routes/analytics.js';
 import superAdminRoutes from './routes/super-admin.js';
+import superAdminStoreRoutes from './routes/super-admin-stores.js';
 
 // Type declarations for JWT
 declare module '@fastify/jwt' {
@@ -56,6 +57,7 @@ declare module 'fastify' {
       role?: string;
       email?: string;
     };
+    tenantId: string; // Added by tenant middleware
   }
 }
 
@@ -631,6 +633,7 @@ await fastify.register(couponRoutes, { prefix: '/api/coupons' });
 await fastify.register(wishlistRoutes, { prefix: '/api/wishlist' });
 await fastify.register(analyticsRoutes, { prefix: '/api/analytics' });
 await fastify.register(superAdminRoutes, { prefix: '/api/super-admin' });
+await fastify.register(superAdminStoreRoutes, { prefix: '/api/super-admin' });
 
 // Start the server
 try {

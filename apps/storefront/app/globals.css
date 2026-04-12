@@ -1,49 +1,61 @@
 @import "tailwindcss";
 
 /* ============================================
-   NEO-BRUTALIST E-COMMERCE DESIGN SYSTEM
-   Raw, honest, high-contrast, unforgettable
+   ELEVATED NEO-BRUTALIST E-COMMERCE
+   Refined rawness. Intentional chaos.
    ============================================ */
 
 :root {
-  /* Core Palette - Neo-Brutalist */
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #141414;
-  --bg-tertiary: #1a1a1a;
-  --bg-elevated: #222222;
+  /* Refined Palette - Deeper, richer tones */
+  --bg-primary: #080808;
+  --bg-secondary: #111111;
+  --bg-tertiary: #181818;
+  --bg-elevated: #1f1f1f;
 
-  --text-primary: #fafafa;
-  --text-secondary: #a0a0a0;
-  --text-muted: #606060;
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --text-muted: #666666;
 
-  --accent: #00ff88;
-  --accent-dim: rgba(0, 255, 136, 0.1);
-  --accent-dark: rgba(0, 255, 136, 0.2);
+  /* Electric Mint - slightly adjusted for better contrast */
+  --accent: #00ff9d;
+  --accent-dim: rgba(0, 255, 157, 0.08);
+  --accent-dark: rgba(0, 255, 157, 0.15);
+  --accent-glow: rgba(0, 255, 157, 0.3);
 
   --border: #2a2a2a;
   --border-light: #3a3a3a;
-  --border-bright: #fafafa;
+  --border-bright: #ffffff;
 
-  /* Typography */
-  --font-mono: 'Space Mono', monospace;
-  --font-body: 'Satoshi', sans-serif;
+  /* Typography - Refined font stack */
+  --font-mono: 'Space Mono', 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  --font-body: 'Satoshi', 'Inter', system-ui, sans-serif;
 
-  /* Spacing (4px base) */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
-  --space-2xl: 3rem;
-  --space-3xl: 4rem;
-  --space-4xl: 6rem;
-  --space-5xl: 8rem;
-  --space-6xl: 12rem;
+  /* Refined Spacing Scale (8px base with golden ratio) */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.5rem;    /* 24px */
+  --space-6: 2rem;      /* 32px */
+  --space-7: 3rem;      /* 48px */
+  --space-8: 4rem;      /* 64px */
+  --space-9: 6rem;      /* 96px */
+  --space-10: 8rem;     /* 128px */
+  --space-11: 12rem;    /* 192px */
 
-  /* Transitions */
+  /* Refined Transitions */
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-brutal: cubic-bezier(0.87, 0, 0.13, 1);
+  --ease-elastic: cubic-bezier(0.68, -0.3, 0.32, 1.3);
+  --ease-dramatic: cubic-bezier(0.87, 0, 0.13, 1);
+
+  /* Shadows for depth */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-brutal: 4px 4px 0 var(--text-primary);
+  --shadow-accent: 4px 4px 0 var(--accent);
 }
 
 @theme inline {
@@ -366,15 +378,75 @@ body {
   animation: pulse-accent 2s ease-in-out infinite;
 }
 
-/* Stagger Delays */
+/* Magnetic hover effect */
+.magnetic-hover {
+  transition: transform 0.3s var(--ease-smooth);
+}
+
+.magnetic-hover:hover {
+  transform: translateY(-4px);
+}
+
+/* Glitch effect on hover */
+.glitch-hover {
+  position: relative;
+}
+
+.glitch-hover::before,
+.glitch-hover::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.glitch-hover:hover::before {
+  animation: glitch-1 0.3s linear;
+  color: #ff0080;
+  z-index: -1;
+  opacity: 0.8;
+}
+
+.glitch-hover:hover::after {
+  animation: glitch-2 0.3s linear;
+  color: #00ffff;
+  z-index: -2;
+  opacity: 0.8;
+}
+
+@keyframes glitch-1 {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(2px, -2px); }
+  60% { transform: translate(-2px, 0); }
+  80% { transform: translate(2px, 0); }
+}
+
+@keyframes glitch-2 {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(2px, -2px); }
+  40% { transform: translate(-2px, 2px); }
+  60% { transform: translate(2px, 0); }
+  80% { transform: translate(-2px, 0); }
+}
+
+/* Stagger Delays - Enhanced */
 .delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
 .delay-200 { animation-delay: 200ms; }
+.delay-250 { animation-delay: 250ms; }
 .delay-300 { animation-delay: 300ms; }
 .delay-400 { animation-delay: 400ms; }
 .delay-500 { animation-delay: 500ms; }
 .delay-600 { animation-delay: 600ms; }
 .delay-700 { animation-delay: 700ms; }
 .delay-800 { animation-delay: 800ms; }
+.delay-1000 { animation-delay: 1000ms; }
+.delay-1200 { animation-delay: 1200ms; }
 
 /* ============================================
    BUTTON STYLES
@@ -387,25 +459,26 @@ body {
   gap: 0.5rem;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   padding: 1rem 2rem;
   background: var(--text-primary);
   color: var(--bg-primary);
-  border: 4px solid var(--text-primary);
+  border: 3px solid var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s var(--ease-smooth);
   position: relative;
   overflow: hidden;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .btn-brutalist:hover {
   background: var(--accent);
   border-color: var(--accent);
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 var(--text-primary);
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 var(--text-primary);
 }
 
 .btn-brutalist:active {
@@ -413,20 +486,46 @@ body {
   box-shadow: none;
 }
 
+.btn-brutalist:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Shine effect */
 .btn-brutalist::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%);
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255,255,255,0.3) 50%,
+    transparent 60%
+  );
   transform: translateX(-100%);
-  transition: transform 0.5s ease;
+  transition: transform 0.6s ease;
 }
 
 .btn-brutalist:hover::before {
   transform: translateX(100%);
 }
 
-/* Outline Button */
+/* Disabled state */
+.btn-brutalist:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-brutalist:disabled:hover {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Outline Button - Refined */
 .btn-outline {
   display: inline-flex;
   align-items: center;
@@ -434,23 +533,45 @@ body {
   gap: 0.5rem;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   padding: 1rem 2rem;
   background: transparent;
   color: var(--text-primary);
   border: 2px solid var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s var(--ease-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-outline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--text-primary);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.4s var(--ease-smooth);
+  z-index: -1;
 }
 
 .btn-outline:hover {
-  background: var(--text-primary);
   color: var(--bg-primary);
 }
 
-/* Accent Button */
+.btn-outline:hover::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.btn-outline:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Accent Button - Refined */
 .btn-accent {
   display: inline-flex;
   align-items: center;
@@ -458,23 +579,35 @@ body {
   gap: 0.5rem;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   padding: 1rem 2rem;
   background: var(--accent);
   color: var(--bg-primary);
-  border: none;
+  border: 2px solid var(--accent);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s var(--ease-smooth);
+  position: relative;
+  overflow: hidden;
 }
 
 .btn-accent:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 var(--text-primary);
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 var(--text-primary);
 }
 
-/* Ghost Button */
+.btn-accent:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+.btn-accent:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Ghost Button - Refined */
 .btn-ghost {
   display: inline-flex;
   align-items: center;
@@ -482,34 +615,43 @@ body {
   gap: 0.5rem;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   padding: 0.75rem 1.5rem;
   background: transparent;
   color: var(--text-primary);
   border: none;
   cursor: pointer;
   position: relative;
-  transition: color 0.2s ease;
+  transition: color 0.25s var(--ease-smooth);
 }
 
 .btn-ghost::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: 2px;
   left: 0;
   width: 100%;
   height: 2px;
   background: var(--accent);
   transform: scaleX(0);
   transform-origin: right;
-  transition: transform 0.3s var(--ease-smooth);
+  transition: transform 0.4s var(--ease-smooth);
+}
+
+.btn-ghost:hover {
+  color: var(--accent);
 }
 
 .btn-ghost:hover::after {
   transform: scaleX(1);
   transform-origin: left;
+}
+
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 /* ============================================
@@ -547,19 +689,64 @@ body {
 }
 
 /* ============================================
-   CARD STYLES
+   CARD STYLES - Refined
    ============================================ */
 
 .card-brutalist {
   background: var(--bg-secondary);
   border: 2px solid var(--border);
-  transition: all 0.3s var(--ease-smooth);
+  transition: all 0.4s var(--ease-smooth);
 }
 
 .card-brutalist:hover {
   border-color: var(--text-primary);
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+  box-shadow: 12px 12px 0 var(--text-primary);
+}
+
+/* Product card specific */
+.product-card {
+  background: var(--bg-secondary);
+  border: 3px solid var(--text-primary);
+  transition: all 0.35s var(--ease-smooth);
+  position: relative;
+}
+
+.product-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent-dim);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  transform: translate(8px, 8px);
+}
+
+.product-card:hover {
+  transform: translate(-4px, -4px);
   box-shadow: 8px 8px 0 var(--text-primary);
+}
+
+.product-card:hover::before {
+  opacity: 1;
+}
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--bg-elevated) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ============================================
