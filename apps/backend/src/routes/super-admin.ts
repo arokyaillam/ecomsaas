@@ -96,8 +96,8 @@ export default async function superAdminRoutes(fastify: FastifyInstance) {
 
   // Pre-handler for protected routes (excludes /login)
   fastify.addHook('onRequest', async (request, reply) => {
-    // Skip auth for login route
-    if (request.url === '/api/super-admin/login' || request.url.endsWith('/login')) {
+    // Skip auth for login route only - exact URL match only
+    if (request.url === '/api/super-admin/login') {
       return;
     }
 

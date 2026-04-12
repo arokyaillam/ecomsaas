@@ -13,21 +13,31 @@ declare module 'fastify' {
  * Extract tenant_id from JWT or x-tenant-id header
  * Attach to request.tenantId
  * Reject if missing
+ *
+ * Security: If Authorization header is present with JWT, it MUST be valid.
+ * Only fall back to x-tenant-id header if NO Authorization header is present.
  */
 export async function requireTenant(request: FastifyRequest, reply: FastifyReply) {
   try {
-    // First try to get tenant from JWT payload
-    await request.jwtVerify().catch(() => {
-      // JWT verification is optional here - we'll check headers next
-    });
-
-    const user = request.user as { storeId?: string };
-    const tenantFromJwt = user?.storeId;
-
-    // Get tenant from header (for cases where JWT doesn't have it or for verification)
+    const authHeader = request.headers['authorization'];
     const tenantFromHeader = request.headers['x-tenant-id'] as string | undefined;
+    let tenantFromJwt: string | undefined;
 
-    // Determine tenantId (JWT takes precedence, then header)
+    // If Authorization header is present, JWT MUST be valid - no fallback
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        await request.jwtVerify();
+        const user = request.user as { storeId?: string };
+        tenantFromJwt = user?.storeId;
+      } catch (jwtError) {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          message: 'Invalid or expired JWT token',
+        });
+      }
+    }
+
+    // Determine tenantId: JWT takes precedence if present and valid, otherwise header
     const tenantId = tenantFromJwt || tenantFromHeader;
 
     if (!tenantId) {

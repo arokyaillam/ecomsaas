@@ -185,37 +185,24 @@ export default async function cartRoutes(fastify: FastifyInstance) {
       const modifiersTotal = modifiers?.reduce((sum, mod) => sum + Number(mod.priceAdjustment || 0), 0) || 0;
       const unitPrice = price + modifiersTotal;
 
-      // Upsert: check if item already exists in this cart
-      const existingItem = await db.select()
-        .from(cartItems)
-        .where(and(
-          eq(cartItems.cartId, cart.id),
-          eq(cartItems.productId, productId)
-        ))
-        .limit(1);
-
-      if (existingItem.length > 0) {
-        // Update quantity (add to existing)
-        const newQuantity = existingItem[0].quantity + quantity;
-        await db.update(cartItems)
-          .set({
-            quantity: newQuantity,
-            total: (unitPrice * newQuantity).toString(),
-            modifiers: modifiers || existingItem[0].modifiers,
-            updatedAt: new Date(),
-          })
-          .where(eq(cartItems.id, existingItem[0].id));
-      } else {
-        // Add new item
-        await db.insert(cartItems).values({
-          cartId: cart.id,
-          productId,
-          quantity,
-          price: unitPrice.toString(),
-          total: (unitPrice * quantity).toString(),
-          modifiers: modifiers || [],
-        });
-      }
+      // Atomic upsert using INSERT ... ON CONFLICT DO UPDATE
+      // The unique constraint on (cart_id, product_id) ensures this is race-condition safe
+      await db.insert(cartItems).values({
+        cartId: cart.id,
+        productId,
+        quantity,
+        price: unitPrice.toString(),
+        total: (unitPrice * quantity).toString(),
+        modifiers: modifiers || [],
+      }).onConflictDoUpdate({
+        target: [cartItems.cartId, cartItems.productId],
+        set: {
+          quantity: sql`${cartItems.quantity} + ${quantity}`,
+          total: sql`(${cartItems.price}::numeric * (${cartItems.quantity} + ${quantity}))::text`,
+          modifiers: modifiers || cartItems.modifiers,
+          updatedAt: new Date(),
+        },
+      });
 
       // Update cart totals (preserves couponDiscount)
       await updateCartTotals(cart.id);

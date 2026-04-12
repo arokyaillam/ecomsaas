@@ -39,6 +39,26 @@ function validateFile(mimeType: string, size: number): { valid: boolean; error?:
   return { valid: true };
 }
 
+// Stream file with byte counting to prevent DoS
+async function streamToBufferWithLimit(
+  data: any,
+  maxSize: number
+): Promise<{ buffer: Buffer; error?: string }> {
+  const stream = data.file;
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  for await (const chunk of stream) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxSize) {
+      return { buffer: Buffer.alloc(0), error: 'File too large. Max size: 5MB' };
+    }
+    chunks.push(chunk);
+  }
+
+  return { buffer: Buffer.concat(chunks) };
+}
+
 export default async function uploadRoutes(fastify: FastifyInstance) {
   // Ensure upload directory on startup
   await ensureUploadDir();
@@ -72,17 +92,21 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'No file uploaded' });
       }
 
-      // Validate file
-      const validation = validateFile(data.mimetype, data.file.bytesRead || 0);
-      if (!validation.valid) {
-        return reply.status(400).send({ error: validation.error });
+      // Stream file with byte limit to prevent DoS
+      const { buffer, error: sizeError } = await streamToBufferWithLimit(data, MAX_FILE_SIZE);
+      if (sizeError) {
+        return reply.status(400).send({ error: sizeError });
+      }
+
+      // Validate file type
+      if (!ALLOWED_MIME_TYPES.includes(data.mimetype)) {
+        return reply.status(400).send({ error: 'Invalid file type. Allowed: JPG, PNG, WebP, GIF' });
       }
 
       const filename = generateFilename(data.filename);
       const filepath = join(UPLOAD_DIR, filename);
 
-      // Read file buffer and write to disk
-      const buffer = await data.toBuffer();
+      // Write buffer to disk
       await writeFile(filepath, buffer);
 
       // Return the full URL
@@ -109,17 +133,22 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
 
       for await (const data of files) {
         try {
-          // Validate file
-          const validation = validateFile(data.mimetype, data.file.bytesRead || 0);
-          if (!validation.valid) {
-            errors.push(`${data.filename}: ${validation.error}`);
+          // Stream file with byte limit to prevent DoS
+          const { buffer, error: sizeError } = await streamToBufferWithLimit(data, MAX_FILE_SIZE);
+          if (sizeError) {
+            errors.push(`${data.filename}: ${sizeError}`);
+            continue;
+          }
+
+          // Validate file type
+          if (!ALLOWED_MIME_TYPES.includes(data.mimetype)) {
+            errors.push(`${data.filename}: Invalid file type. Allowed: JPG, PNG, WebP, GIF`);
             continue;
           }
 
           const filename = generateFilename(data.filename);
           const filepath = join(UPLOAD_DIR, filename);
 
-          const buffer = await data.toBuffer();
           await writeFile(filepath, buffer);
 
           uploadedUrls.push(`${getServerUrl()}/uploads/${filename}`);

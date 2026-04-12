@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, orders, orderItems, products, customers, activityLogs } from '../db/index.js';
-import { eq, and, desc, sql, asc, gte } from 'drizzle-orm';
+import { eq, and, desc, sql, asc, gte, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTenant } from '../middleware/tenant.js';
@@ -133,49 +133,53 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     try {
       const offset = (Number(page) - 1) * Number(limit);
 
-      let query = db.select().from(orders).where(eq(orders.storeId, storeId));
+      // Build where clause with all active filters
+      const conditions = [eq(orders.storeId, storeId)];
 
-      // Filters
       if (status) {
-        query = db.select().from(orders).where(
-          and(eq(orders.storeId, storeId), eq(orders.status, status))
-        );
+        conditions.push(eq(orders.status, status));
       }
 
       if (paymentStatus) {
-        query = db.select().from(orders).where(
-          and(eq(orders.storeId, storeId), eq(orders.paymentStatus, paymentStatus))
-        );
+        conditions.push(eq(orders.paymentStatus, paymentStatus));
       }
+
+      let query = db.select().from(orders).where(and(...conditions));
 
       const ordersList = await query
         .orderBy(desc(orders.createdAt))
         .limit(Number(limit))
         .offset(offset);
 
-      // Get customer names (excluding password hash)
-      const ordersWithCustomers = await Promise.all(
-        ordersList.map(async (order) => {
-          let customerName = 'Guest';
-          if (order.customerId) {
-            const customer = await db.select({
-              firstName: customers.firstName,
-              lastName: customers.lastName,
-            })
-              .from(customers)
-              .where(eq(customers.id, order.customerId))
-              .limit(1);
-            if (customer.length > 0) {
-              customerName = `${customer[0].firstName} ${customer[0].lastName}`;
-            }
-          }
-          return { ...order, customerName };
+      // Batch fetch all customer names to avoid N+1 queries
+      const customerIds = ordersList
+        .map(o => o.customerId)
+        .filter((id): id is string => id !== null);
+
+      const customerNamesMap = new Map<string, string>();
+      if (customerIds.length > 0) {
+        const customersData = await db.select({
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
         })
-      );
+          .from(customers)
+          .where(inArray(customers.id, customerIds));
+
+        for (const c of customersData) {
+          const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Guest';
+          customerNamesMap.set(c.id, name);
+        }
+      }
+
+      const ordersWithCustomers = ordersList.map((order) => ({
+        ...order,
+        customerName: order.customerId ? customerNamesMap.get(order.customerId) || 'Guest' : 'Guest',
+      }));
 
       const totalCount = await db.select({ count: sql`count(*)` })
         .from(orders)
-        .where(eq(orders.storeId, storeId));
+        .where(and(...conditions));
 
       return reply.send({
         data: ordersWithCustomers,
@@ -206,29 +210,32 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         .orderBy(desc(orders.createdAt))
         .limit(Number(limit));
 
-      // Get customer names (excluding password hash)
-      const ordersWithCustomers = await Promise.all(
-        recentOrders.map(async (order) => {
-          let customerName = 'Guest';
-          if (order.customerId) {
-            const customer = await db.select({
-              firstName: customers.firstName,
-              lastName: customers.lastName,
-            })
-              .from(customers)
-              .where(eq(customers.id, order.customerId))
-              .limit(1);
-            if (customer.length > 0) {
-              customerName = `${customer[0].firstName} ${customer[0].lastName}`;
-            }
-          }
-          return {
-            ...order,
-            customerName,
-            orderNumber: order.orderNumber || order.id.slice(0, 8).toUpperCase(),
-          };
+      // Batch fetch all customer names to avoid N+1 queries
+      const customerIds = recentOrders
+        .map(o => o.customerId)
+        .filter((id): id is string => id !== null);
+
+      const customerNamesMap = new Map<string, string>();
+      if (customerIds.length > 0) {
+        const customersData = await db.select({
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
         })
-      );
+          .from(customers)
+          .where(inArray(customers.id, customerIds));
+
+        for (const c of customersData) {
+          const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Guest';
+          customerNamesMap.set(c.id, name);
+        }
+      }
+
+      const ordersWithCustomers = recentOrders.map((order) => ({
+        ...order,
+        customerName: order.customerId ? customerNamesMap.get(order.customerId) || 'Guest' : 'Guest',
+        orderNumber: order.orderNumber || order.id.slice(0, 8).toUpperCase(),
+      }));
 
       return reply.send({
         data: ordersWithCustomers,

@@ -58,23 +58,47 @@ export default async function RootLayout({
   const theme = store?.theme || defaultTheme;
 
   // Sanitize theme values to prevent CSS injection
+  // Allow only: valid CSS colors, dimensions, safe font-family strings
+  // Reject: < > " ' \ ; or the word "script"
   const sanitizeCssValue = (value: string | null | undefined, fallback: string): string => {
     if (!value) return fallback;
     const str = value.trim();
+
+    // Reject dangerous characters and script keyword (include newlines for CSS injection)
+    if (/[<>'"\\;\r\n]|script/i.test(str)) return fallback;
+
+    // Valid hex colors: #rgb, #rrggbb, #rgba, #rrggbbaa
     if (/^#[0-9a-fA-F]{3,8}$/.test(str)) return str;
-    if (/^(rgba?\(|hsla?\()\s*[\d\s,.%]+\)$/.test(str)) return str;
-    if (/^\d+(\.\d+)?(px|rem|em|%)$/.test(str)) return str;
-    // Font family names: no parentheses (blocks url()/expression()), no semicolons/braces
-    if (/^[a-zA-Z0-9\s,'"\-]+$/.test(str) && !/[;{}()]/.test(str)) return str;
+
+    // Valid rgb/rgba/hsl/hsla functions
+    if (/^(rgba?|hsla?)\s*\(\s*[\d\s,.%]+\s*\)$/.test(str)) return str;
+
+    // Valid CSS dimension values: 12px, 0.5rem, 100%, etc.
+    if (/^\d+(\.\d+)?(px|rem|em|%|vh|vw|ex|ch|cm|mm|in|pt|pc)$/.test(str)) return str;
+
+    // Safe font-family strings: letters, numbers, spaces, commas, quotes, hyphens
+    // Must not contain parentheses, braces, or semicolons (already checked above)
+    if (/^[a-zA-Z0-9\s,'"\-]+$/.test(str)) return str;
+
     return fallback;
   };
 
   // Sanitize URL values to prevent javascript:/data: URI injection
+  // Allow only: http:// https:// URLs and safe relative paths
+  // Reject: javascript: data: vbscript: about: etc.
   const sanitizeUrl = (value: string | null | undefined): string | null => {
     if (!value) return null;
     const str = value.trim();
+
+    // Reject dangerous characters
+    if (/[<>'"\\;]/.test(str)) return null;
+
+    // Allow http:// and https:// URLs
     if (/^https?:\/\//i.test(str)) return str;
-    if (/^\/[^/]/.test(str)) return str; // relative paths
+
+    // Allow relative paths starting with / (but not // which could be protocol-relative)
+    if (/^\/(?!\/)[a-zA-Z0-9_\-\/\.~]*$/.test(str)) return str;
+
     return null;
   };
 
@@ -188,7 +212,7 @@ export default async function RootLayout({
         `}</style>
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={safeTheme}>
           <Providers storeId={store?.id}>
             {children}
           </Providers>

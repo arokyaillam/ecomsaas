@@ -41,7 +41,8 @@ export const stores = pgTable("stores", {
   planId: uuid("plan_id").references(() => merchantPlans.id),
   planExpiresAt: timestamp("plan_expires_at"),
   // Owner Info
-  ownerEmail: text("owner_email").notNull(),
+  // NOTE: If adding unique constraint to existing data, verify no duplicates exist first
+  ownerEmail: text("owner_email").notNull().unique(),
   ownerName: text("owner_name"),
   ownerPhone: text("owner_phone"),
   // Store Stats
@@ -334,7 +335,7 @@ export const orders = pgTable("orders", {
   deliveredAt: timestamp("delivered_at"),
   // Discounts
   couponCode: text("coupon_code"),
-  couponId: uuid("coupon_id").references(() => coupons.id),
+  couponId: uuid("coupon_id").references(() => coupons.id, { onDelete: 'set null' }),
   // Metadata
   notes: text("notes"), // Customer notes
   adminNotes: text("admin_notes"), // Internal notes

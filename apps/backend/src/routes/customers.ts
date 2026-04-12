@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { db, customers, customerAddresses, orders, reviews, stores } from '../db/index.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
@@ -131,7 +131,22 @@ export default async function customerRoutes(fastify: FastifyInstance) {
   fastify.post('/login', {
     config: authRateLimit,
   }, async (request, reply) => {
-    const { storeId, email, password } = request.body as any;
+    const { email, password } = request.body as any;
+
+    // Derive storeId from the storefront domain header instead of trusting the request body
+    const domain = request.headers['x-store-domain'] as string || 'localhost';
+    let storeId: string;
+
+    try {
+      const storeArr = await db.select({ id: stores.id }).from(stores).where(eq(stores.domain, domain)).limit(1);
+      if (storeArr.length === 0) {
+        return reply.status(400).send({ error: 'Store not found' });
+      }
+      storeId = storeArr[0].id;
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to login' });
+    }
 
     try {
       const customerArr = await db.select()
@@ -462,27 +477,41 @@ export default async function customerRoutes(fastify: FastifyInstance) {
         .limit(Number(limit))
         .offset(offset);
 
-      // Get order counts for each customer
-      const customersWithStats = await Promise.all(
-        customersList.map(async (customer) => {
-          const orderCount = await db.select({ count: sql`count(*)` })
-            .from(orders)
-            .where(eq(orders.customerId, customer.id));
+      // Batch fetch order stats for all customers to avoid N+1 queries
+      const customerIds = customersList.map(c => c.id);
+      const statsMap = new Map<string, { orderCount: number; totalSpent: number }>();
 
-          const totalSpent = await db.select({
-            total: sql`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total::numeric ELSE 0 END), 0)`
-          })
-            .from(orders)
-            .where(eq(orders.customerId, customer.id));
-
-          return {
-            ...customer,
-            orderCount: Number(orderCount[0]?.count || 0),
-            totalSpent: Number(totalSpent[0]?.total || 0),
-            // password already excluded by select
-          };
+      if (customerIds.length > 0) {
+        const statsData = await db.select({
+          customerId: orders.customerId,
+          orderCount: sql<number>`count(*)`,
+          totalSpent: sql<number>`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total::numeric ELSE 0 END), 0)`,
         })
-      );
+          .from(orders)
+          .where(and(
+            eq(orders.storeId, storeId),
+            inArray(orders.customerId, customerIds)
+          ))
+          .groupBy(orders.customerId);
+
+        for (const row of statsData) {
+          if (row.customerId) {
+            statsMap.set(row.customerId, {
+              orderCount: Number(row.orderCount),
+              totalSpent: Number(row.totalSpent),
+            });
+          }
+        }
+      }
+
+      const customersWithStats = customersList.map((customer) => {
+        const stats = statsMap.get(customer.id) || { orderCount: 0, totalSpent: 0 };
+        return {
+          ...customer,
+          orderCount: stats.orderCount,
+          totalSpent: stats.totalSpent,
+        };
+      });
 
       const totalCount = await db.select({ count: sql`count(*)` })
         .from(customers)
