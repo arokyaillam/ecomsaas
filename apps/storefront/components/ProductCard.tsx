@@ -2,27 +2,24 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ShoppingBag, ArrowUpRight, Check } from 'lucide-react';
+import { ShoppingBag, Check } from 'lucide-react';
 import { useState } from 'react';
+import { useCart } from '@/lib/cart';
 
 interface ProductCardProps {
   product: any;
-  theme?: any;
   currency?: string;
-  store?: any;
 }
 
-export function ProductCard({ product, theme, currency, store }: ProductCardProps) {
+export function ProductCard({ product, currency = 'USD' }: ProductCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [addState, setAddState] = useState<'idle' | 'adding' | 'added'>('idle');
+  const cart = useCart();
 
-  const storeCurrency = currency || store?.currency || 'USD';
   const imageUrl = product.images?.split(',')[0];
   const hasDiscount = Number(product.discount) > 0;
   const isOutOfStock = product.currentQuantity <= 0;
-  const isLowStock = product.currentQuantity > 0 && product.currentQuantity <= 5;
 
   const formatPrice = (price: string | number) => {
     const num = typeof price === 'string' ? parseFloat(price) : price;
@@ -36,152 +33,115 @@ export function ProductCard({ product, theme, currency, store }: ProductCardProp
       : originalPrice - Number(product.discount)
     : originalPrice;
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (isOutOfStock) return;
+    e.stopPropagation();
+    if (isOutOfStock || !cart) return;
 
     setAddState('adding');
-    setTimeout(() => {
+    try {
+      await cart.addToCart(product.id, 1);
       setAddState('added');
       setTimeout(() => setAddState('idle'), 1500);
-    }, 800);
+    } catch (err) {
+      console.error('Failed to add to cart:', err);
+      setAddState('idle');
+    }
   };
 
+  const displayPrice = hasDiscount ? discountedPrice : originalPrice;
+
   return (
-    <div
-      className="group relative"
+    <Link
+      href={`/product/${product.id}`}
+      className="group block"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="relative border-[3px] border-[var(--text-primary)] bg-[var(--bg-secondary)] transition-all duration-300 hover:translate-y-[-6px] hover:shadow-[8px_8px_0_var(--text-primary)]">
-        <Link href={`/product/${product.id}`} className="block relative aspect-[4/5] overflow-hidden bg-[var(--bg-tertiary)]">
-          {!imageLoaded && !imageError && imageUrl && (
-            <div className="absolute inset-0 skeleton" />
+      <div className="product-card">
+        {/* Image Container */}
+        <div className="relative aspect-[3/4] overflow-hidden rounded-t-lg">
+          {/* Badge */}
+          {hasDiscount && (
+            <div className="absolute top-3 left-3 z-10">
+              <span className="badge badge-accent">
+                -{product.discount}{product.discountType === 'Percent' ? '%' : ''}
+              </span>
+            </div>
           )}
 
+          {isOutOfStock && (
+            <div className="absolute top-3 left-3 z-10">
+              <span className="badge">Out of Stock</span>
+            </div>
+          )}
+
+          {/* Image */}
           {imageUrl && !imageError ? (
             <Image
               src={imageUrl}
               alt={product.titleEn}
               fill
-              className={`object-cover transition-all duration-700 ${
+              className={`object-cover transition-transform duration-500 ${
                 isHovered ? 'scale-105' : 'scale-100'
-              } ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              }`}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               onError={() => setImageError(true)}
-              onLoad={() => setImageLoaded(true)}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="font-mono text-6xl font-bold text-[var(--text-muted)] opacity-30">?</span>
+            <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+              <span className="text-4xl" style={{ color: 'var(--border)' }}>?</span>
             </div>
           )}
 
-          <div className={`absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/40 to-transparent transition-opacity duration-500 ${
-            isHovered ? 'opacity-80' : 'opacity-0'
-          }`} />
-
-          {hasDiscount && (
-            <div className="absolute top-4 left-4 bg-[var(--accent)] text-[var(--bg-primary)] px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider shadow-lg">
-              -{product.discount}{product.discountType === 'Percent' ? '%' : ` ${storeCurrency}`}
-            </div>
-          )}
-
-          {isOutOfStock ? (
-            <div className="absolute top-4 right-4 bg-[var(--text-muted)] text-[var(--text-primary)] px-3 py-1.5 font-mono text-xs font-bold uppercase">
-              Sold Out
-            </div>
-          ) : isLowStock ? (
-            <div className="absolute top-4 right-4 bg-[var(--accent)] text-[var(--bg-primary)] px-3 py-1.5 font-mono text-xs font-bold uppercase animate-pulse">
-              Only {product.currentQuantity} Left
-            </div>
-          ) : null}
-
-          <div className={`absolute inset-0 flex flex-col justify-end p-4 transition-all duration-300 ${
-            isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}>
+          {/* Quick Add Button */}
+          {!isOutOfStock && (
             <button
-              className="w-full btn-brutalist text-sm py-3.5 flex items-center justify-center gap-2"
-              disabled={isOutOfStock || addState !== 'idle'}
               onClick={handleAddToCart}
+              disabled={addState !== 'idle'}
+              className="quick-add absolute bottom-3 left-3 right-3 py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 bg-white text-[var(--text-primary)] shadow-md hover:shadow-lg transition-all"
             >
-              {addState === 'adding' && <span className="animate-pulse">Adding...</span>}
-              {addState === 'added' && (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>Added!</span>
-                </>
-              )}
               {addState === 'idle' && (
                 <>
                   <ShoppingBag className="w-4 h-4" />
-                  <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
+                  Quick Add
+                </>
+              )}
+              {addState === 'adding' && <span>Adding...</span>}
+              {addState === 'added' && (
+                <>
+                  <Check className="w-4 h-4 text-green-600" />
+                  Added!
                 </>
               )}
             </button>
-          </div>
+          )}
+        </div>
 
-          <div className={`absolute top-4 left-1/2 -translate-x-1/2 transition-all duration-300 ${
-            isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'
-          }`}>
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-primary)]/90 backdrop-blur-sm text-[var(--text-primary)] font-mono text-xs uppercase tracking-wider border border-[var(--text-primary)]">
-              View Details
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
-        </Link>
-
-        <div className="p-5 border-t-[3px] border-[var(--text-primary)]">
+        {/* Content */}
+        <div className="p-4">
           {product.categoryName && (
-            <span className="text-caption text-[var(--accent)] mb-2 block tracking-widest">
+            <span className="text-small mb-1 block" style={{ color: 'var(--text-muted)' }}>
               {product.categoryName}
             </span>
           )}
 
-          <Link href={`/product/${product.id}`}>
-            <h3 className="font-mono text-base font-bold text-[var(--text-primary)] leading-snug mb-2 line-clamp-2 transition-colors duration-200 group-hover:text-[var(--accent)]">
-              {product.titleEn}
-            </h3>
-          </Link>
+          <h3 className="font-medium mb-2 line-clamp-2 group-hover:text-[var(--accent)] transition-colors" style={{ color: 'var(--text-primary)' }}>
+            {product.titleEn}
+          </h3>
 
-          {product.titleAr && (
-            <p className="text-sm text-[var(--text-secondary)] mb-3 line-clamp-1 opacity-80" dir="rtl">
-              {product.titleAr}
-            </p>
-          )}
-
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <span className="font-mono text-xl font-bold text-[var(--text-primary)]">
-              {storeCurrency} {formatPrice(hasDiscount ? discountedPrice : product.salePrice)}
+          <div className="flex items-center gap-2">
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {currency} {formatPrice(displayPrice)}
             </span>
             {hasDiscount && (
-              <span className="font-mono text-sm text-[var(--text-muted)] line-through">
-                {storeCurrency} {formatPrice(product.salePrice)}
+              <span className="text-sm line-through" style={{ color: 'var(--text-muted)' }}>
+                {currency} {formatPrice(originalPrice)}
               </span>
             )}
           </div>
-
-          {product.rating && (
-            <div className="flex items-center gap-1 mt-2">
-              <div className="flex text-[var(--accent)]">
-                {[...Array(5)].map((_, i) => (
-                  <svg
-                    key={i}
-                    className={`w-3.5 h-3.5 ${i < Math.round(product.rating) ? 'opacity-100' : 'opacity-30'}`}
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                ))}
-              </div>
-              <span className="text-xs text-[var(--text-muted)] font-mono">
-                ({product.reviewCount || 0})
-              </span>
-            </div>
-          )}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

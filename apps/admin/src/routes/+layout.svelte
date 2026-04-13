@@ -192,6 +192,8 @@
                     <button class="logout-btn" onclick={() => {
                         localStorage.removeItem('merchant_token');
                         localStorage.removeItem('merchant_store_id');
+                        // Clear cookie for server-side auth
+                        document.cookie = 'merchant_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
                         window.location.href = '/login';
                     }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

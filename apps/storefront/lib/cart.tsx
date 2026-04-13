@@ -1,47 +1,16 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import type { Cart, CartItem, CartItemModifier } from './types';
 
-// Use relative URL to leverage Next.js API proxy (avoids CORS issues)
 const API_URL = '';
-
-interface CartItem {
-  id: string;
-  productId: string;
-  quantity: number;
-  price: string;
-  total: string;
-  modifiers?: any[];
-  product: {
-    id: string;
-    titleEn: string;
-    titleAr?: string;
-    images?: string;
-    salePrice: string;
-    currentQuantity: number;
-    isPublished: boolean;
-  };
-}
-
-interface Cart {
-  id: string;
-  storeId: string;
-  customerId?: string;
-  sessionId?: string;
-  couponCode?: string;
-  couponDiscount: string;
-  subtotal: string;
-  total: string;
-  itemCount: number;
-  items: CartItem[];
-}
 
 interface CartContextType {
   cart: Cart | null;
   loading: boolean;
   error: string | null;
   fetchCart: () => Promise<void>;
-  addToCart: (productId: string, quantity: number, modifiers?: any[]) => Promise<void>;
+  addToCart: (productId: string, quantity: number, modifiers?: CartItemModifier[]) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
   applyCoupon: (code: string) => Promise<void>;
@@ -76,7 +45,7 @@ export function CartProvider({ children, storeId }: { children: React.ReactNode;
     }
   }, [storeId, fetchCart]);
 
-  const addToCart = useCallback(async (productId: string, quantity: number, modifiers?: any[]) => {
+  const addToCart = useCallback(async (productId: string, quantity: number, modifiers?: CartItemModifier[]) => {
     setLoading(true);
     setError(null);
     try {
@@ -155,8 +124,25 @@ export function CartProvider({ children, storeId }: { children: React.ReactNode;
   }, [storeId, fetchCart]);
 
   const removeCoupon = useCallback(async () => {
-    // Implement coupon removal logic
-    await fetchCart();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/cart/coupon`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove coupon');
+      }
+
+      await fetchCart();
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, [fetchCart]);
 
   const clearCart = useCallback(async () => {

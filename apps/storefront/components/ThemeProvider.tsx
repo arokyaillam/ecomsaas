@@ -54,6 +54,20 @@ function sanitizeCssValue(value: string | null | undefined, fallback: string): s
   return fallback;
 }
 
+// Warm Minimalist Design System Colors
+const warmTheme = {
+  primaryColor: '#e85d4c',
+  secondaryColor: '#6366f1',
+  accentColor: '#e85d4c',
+  backgroundColor: '#faf8f5',
+  surfaceColor: '#ffffff',
+  textColor: '#1a1a1a',
+  textSecondaryColor: '#4a4a4a',
+  borderColor: '#e8e4dc',
+  borderRadius: '12px',
+  fontFamily: 'Satoshi, Inter, system-ui, sans-serif',
+};
+
 // Store context
 const StoreContext = createContext<Store | null>(null);
 
@@ -62,49 +76,67 @@ export function useStore() {
 }
 
 export function ThemeProvider({ theme: initialTheme, children }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<StoreTheme>(initialTheme || defaultTheme);
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Try to fetch fresh theme from API on client side
-    async function loadTheme() {
+    // Extract store domain from hostname (e.g., "arokyastore.localhost" -> "arokyastore")
+    function extractStoreDomain(hostname: string): string {
+      // Remove port if present
+      const hostWithoutPort = hostname.split(':')[0];
+
+      // Extract subdomain part (before the first dot)
+      if (hostWithoutPort.includes('.')) {
+        const parts = hostWithoutPort.split('.');
+        // If first part is "www", skip it
+        if (parts[0] === 'www' && parts.length > 2) {
+          return parts[1];
+        } else if (parts.length >= 2) {
+          // Take the first part as the store domain
+          return parts[0];
+        }
+      }
+
+      return hostWithoutPort;
+    }
+
+    // Try to fetch store data on client side (but don't use its theme)
+    async function loadStore() {
       try {
-        const domain = window.location.hostname;
+        const domain = extractStoreDomain(window.location.hostname);
         const fetchedStore = await getStoreByDomain(domain);
-        if (fetchedStore?.theme) {
-          setTheme(fetchedStore.theme);
+        if (fetchedStore) {
           setStore(fetchedStore);
         }
       } catch (error) {
-        console.error('Failed to load theme:', error);
+        console.error('Failed to load store:', error);
       } finally {
         setLoading(false);
       }
     }
-    loadTheme();
+    loadStore();
   }, []);
 
   useEffect(() => {
-    // Apply CSS variables to document (sanitized)
+    // Apply warm minimalist CSS variables to document
     const root = document.documentElement;
-    root.style.setProperty('--primary', sanitizeCssValue(theme.primaryColor, defaultTheme.primaryColor));
-    root.style.setProperty('--secondary', sanitizeCssValue(theme.secondaryColor, defaultTheme.secondaryColor));
-    root.style.setProperty('--accent', sanitizeCssValue(theme.accentColor, defaultTheme.accentColor));
-    root.style.setProperty('--background', sanitizeCssValue(theme.backgroundColor, defaultTheme.backgroundColor));
-    root.style.setProperty('--surface', sanitizeCssValue(theme.surfaceColor, defaultTheme.surfaceColor));
-    root.style.setProperty('--text', sanitizeCssValue(theme.textColor, defaultTheme.textColor));
-    root.style.setProperty('--text-secondary', sanitizeCssValue(theme.textSecondaryColor, defaultTheme.textSecondaryColor));
-    root.style.setProperty('--border', sanitizeCssValue(theme.borderColor, defaultTheme.borderColor));
-    root.style.setProperty('--radius', sanitizeCssValue(theme.borderRadius, defaultTheme.borderRadius));
-    root.style.setProperty('--font-family', sanitizeCssValue(theme.fontFamily, defaultTheme.fontFamily));
+    root.style.setProperty('--primary', warmTheme.primaryColor);
+    root.style.setProperty('--secondary', warmTheme.secondaryColor);
+    root.style.setProperty('--accent', warmTheme.accentColor);
+    root.style.setProperty('--background', warmTheme.backgroundColor);
+    root.style.setProperty('--surface', warmTheme.surfaceColor);
+    root.style.setProperty('--text', warmTheme.textColor);
+    root.style.setProperty('--text-secondary', warmTheme.textSecondaryColor);
+    root.style.setProperty('--border', warmTheme.borderColor);
+    root.style.setProperty('--radius', warmTheme.borderRadius);
+    root.style.setProperty('--font-family', warmTheme.fontFamily);
 
-    // Apply body styles (sanitized)
-    document.body.style.backgroundColor = sanitizeCssValue(theme.backgroundColor, defaultTheme.backgroundColor);
-    document.body.style.color = sanitizeCssValue(theme.textColor, defaultTheme.textColor);
-  }, [theme]);
+    // Apply body styles
+    document.body.style.backgroundColor = warmTheme.backgroundColor;
+    document.body.style.color = warmTheme.textColor;
+  }, []);
 
-  if (loading && !theme) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

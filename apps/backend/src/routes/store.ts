@@ -443,6 +443,8 @@ export default async function storeRoutes(fastify: FastifyInstance) {
           domain: store.domain,
           currency: store.currency,
           language: store.language,
+          ownerEmail: store.ownerEmail,
+          ownerName: store.ownerName,
           theme: {
             primaryColor: store.primaryColor || '#0ea5e9',
             secondaryColor: store.secondaryColor || '#6366f1',

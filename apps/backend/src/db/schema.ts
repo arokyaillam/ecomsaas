@@ -254,6 +254,8 @@ export const customers = pgTable("customers", {
   isVerified: boolean("is_verified").default(false),
   marketingEmails: boolean("marketing_emails").default(true),
   lastLoginAt: timestamp("last_login_at"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetExpires: timestamp("password_reset_expires"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({

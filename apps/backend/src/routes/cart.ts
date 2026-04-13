@@ -11,12 +11,16 @@ async function getCartIdentifier(request: any): Promise<{ sessionId: string | nu
   let sessionId: string | null = request.cookies?.cart_session_id || null;
   let customerId: string | null = null;
 
+  console.log(`getCartIdentifier: cookies=${JSON.stringify(request.cookies)}`);
+
   try {
     await request.jwtVerify();
     const user = request.user as { customerId?: string };
     customerId = user?.customerId || null;
-  } catch {
+    console.log(`JWT verified, customerId=${customerId}`);
+  } catch (err: any) {
     // Not logged in - guest cart
+    console.log(`JWT verification failed: ${err.message}`);
   }
 
   return { sessionId, customerId };
@@ -29,10 +33,17 @@ async function findOrCreateCart(
   customerId: string | null,
   reply: any
 ): Promise<{ cart: any; sessionId: string }> {
+  console.log(`findOrCreateCart: storeId=${storeId}, sessionId=${sessionId}, customerId=${customerId}`);
   let effectiveSessionId = sessionId;
 
-  if (!effectiveSessionId && !customerId) {
+  // Always need a sessionId for the cart (NOT NULL constraint)
+  // Generate one if missing (for both guests and logged-in users)
+  if (!effectiveSessionId) {
     effectiveSessionId = generateSessionId();
+  }
+
+  // Set cookie for guests (no customerId) - they need session tracking
+  if (!customerId) {
     reply.setCookie('cart_session_id', effectiveSessionId, {
       path: '/',
       httpOnly: true,
@@ -58,7 +69,10 @@ async function findOrCreateCart(
   let cartArr = await cartQuery.limit(1);
   let cart = cartArr[0];
 
+  console.log(`Query result: ${cartArr.length} carts found`);
+
   if (!cart) {
+    console.log(`Creating new cart with sessionId=${effectiveSessionId}`);
     const newCart = await db.insert(carts).values({
       storeId,
       customerId,
@@ -66,6 +80,9 @@ async function findOrCreateCart(
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
     }).returning();
     cart = newCart[0];
+    console.log(`New cart created: ${cart.id}`);
+  } else {
+    console.log(`Found existing cart: ${cart.id}`);
   }
 
   return { cart, sessionId: effectiveSessionId || cart.sessionId };
@@ -113,7 +130,9 @@ export default async function cartRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      fastify.log.info(`Fetching cart for storeId: ${storeId}, sessionId: ${sessionId}, customerId: ${customerId}`);
       const { cart } = await findOrCreateCart(storeId, sessionId, customerId, reply);
+      fastify.log.info(`Cart found/created: ${cart.id}`);
 
       // Get cart items with product details
       const items = await db.select({

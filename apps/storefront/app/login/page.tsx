@@ -122,7 +122,18 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium">Password</label>
+                {!isRegistering && (
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm hover:underline"
+                    style={{ color: 'var(--primary)' }}
+                  >
+                    Forgot password?
+                  </Link>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
                 <input

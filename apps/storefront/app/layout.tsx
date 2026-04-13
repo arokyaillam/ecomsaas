@@ -3,7 +3,11 @@ import { headers } from "next/headers";
 import { getStoreByDomain } from "@/lib/store";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Providers } from "@/components/Providers";
+import { SkipNav } from "@/components/SkipNav";
 import "./globals.css";
+
+// Force dynamic rendering for multi-tenant setup
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata(): Promise<Metadata> {
   try {
@@ -11,15 +15,48 @@ export async function generateMetadata(): Promise<Metadata> {
     const domain = headersList.get('x-store-domain') || 'localhost';
     const store = await getStoreByDomain(domain);
 
+    const storeName = store?.name || "EcomSaaS Storefront";
+    const description = store?.hero?.subtitle || "Discover amazing products at great prices";
+    const url = `https://${domain}`;
+
     return {
-      title: store?.name || "EcomSaaS Storefront",
-      description: "Modern e-commerce storefront",
-      icons: store?.theme.faviconUrl ? { icon: store.theme.faviconUrl } : undefined,
+      title: {
+        default: storeName,
+        template: `%s | ${storeName}`,
+      },
+      description,
+      metadataBase: new URL(url),
+      openGraph: {
+        type: 'website',
+        title: storeName,
+        description,
+        siteName: storeName,
+        images: store?.hero?.image ? [{ url: store.hero.image }] : undefined,
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: storeName,
+        description,
+        images: store?.hero?.image ? [store.hero.image] : undefined,
+      },
+      icons: store?.theme?.faviconUrl ? { icon: store.theme.faviconUrl } : undefined,
+      robots: {
+        index: true,
+        follow: true,
+        googleBot: {
+          index: true,
+          follow: true,
+          'max-video-preview': -1,
+          'max-image-preview': 'large',
+          'max-snippet': -1,
+        },
+      },
     };
   } catch {
     return {
       title: "EcomSaaS Storefront",
       description: "Modern e-commerce storefront",
+      robots: { index: true, follow: true },
     };
   }
 }
@@ -39,182 +76,46 @@ export default async function RootLayout({
     console.error('Failed to load store in layout:', error);
   }
 
-  // Default theme if no store found
-  const defaultTheme = {
-    primaryColor: "#0ea5e9",
-    secondaryColor: "#6366f1",
-    accentColor: "#8b5cf6",
-    backgroundColor: "#0f172a",
-    surfaceColor: "#1e293b",
-    textColor: "#f8fafc",
-    textSecondaryColor: "#94a3b8",
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: "12px",
-    fontFamily: "Inter, sans-serif",
-    logoUrl: null,
-    faviconUrl: null,
-  };
-
-  const theme = store?.theme || defaultTheme;
-
-  // Sanitize theme values to prevent CSS injection
-  // Allow only: valid CSS colors, dimensions, safe font-family strings
-  // Reject: < > " ' \ ; or the word "script"
-  const sanitizeCssValue = (value: string | null | undefined, fallback: string): string => {
-    if (!value) return fallback;
-    const str = value.trim();
-
-    // Reject dangerous characters and script keyword (include newlines for CSS injection)
-    if (/[<>'"\\;\r\n]|script/i.test(str)) return fallback;
-
-    // Valid hex colors: #rgb, #rrggbb, #rgba, #rrggbbaa
-    if (/^#[0-9a-fA-F]{3,8}$/.test(str)) return str;
-
-    // Valid rgb/rgba/hsl/hsla functions
-    if (/^(rgba?|hsla?)\s*\(\s*[\d\s,.%]+\s*\)$/.test(str)) return str;
-
-    // Valid CSS dimension values: 12px, 0.5rem, 100%, etc.
-    if (/^\d+(\.\d+)?(px|rem|em|%|vh|vw|ex|ch|cm|mm|in|pt|pc)$/.test(str)) return str;
-
-    // Safe font-family strings: letters, numbers, spaces, commas, quotes, hyphens
-    // Must not contain parentheses, braces, or semicolons (already checked above)
-    if (/^[a-zA-Z0-9\s,'"\-]+$/.test(str)) return str;
-
-    return fallback;
-  };
-
-  // Sanitize URL values to prevent javascript:/data: URI injection
-  // Allow only: http:// https:// URLs and safe relative paths
-  // Reject: javascript: data: vbscript: about: etc.
-  const sanitizeUrl = (value: string | null | undefined): string | null => {
-    if (!value) return null;
-    const str = value.trim();
-
-    // Reject dangerous characters
-    if (/[<>'"\\;]/.test(str)) return null;
-
-    // Allow http:// and https:// URLs
-    if (/^https?:\/\//i.test(str)) return str;
-
-    // Allow relative paths starting with / (but not // which could be protocol-relative)
-    if (/^\/(?!\/)[a-zA-Z0-9_\-\/\.~]*$/.test(str)) return str;
-
-    return null;
-  };
-
+  // Warm Minimalist Design System - Consistent across all stores
   const safeTheme = {
-    primaryColor: sanitizeCssValue(theme.primaryColor, defaultTheme.primaryColor),
-    secondaryColor: sanitizeCssValue(theme.secondaryColor, defaultTheme.secondaryColor),
-    accentColor: sanitizeCssValue(theme.accentColor, defaultTheme.accentColor),
-    backgroundColor: sanitizeCssValue(theme.backgroundColor, defaultTheme.backgroundColor),
-    surfaceColor: sanitizeCssValue(theme.surfaceColor, defaultTheme.surfaceColor),
-    textColor: sanitizeCssValue(theme.textColor, defaultTheme.textColor),
-    textSecondaryColor: sanitizeCssValue(theme.textSecondaryColor, defaultTheme.textSecondaryColor),
-    borderColor: sanitizeCssValue(theme.borderColor, defaultTheme.borderColor),
-    borderRadius: sanitizeCssValue(theme.borderRadius, defaultTheme.borderRadius),
-    fontFamily: sanitizeCssValue(theme.fontFamily, defaultTheme.fontFamily),
-    logoUrl: sanitizeUrl(theme.logoUrl),
-    faviconUrl: sanitizeUrl(theme.faviconUrl),
+    primaryColor: '#e85d4c',
+    secondaryColor: '#6366f1',
+    accentColor: '#e85d4c',
+    backgroundColor: '#faf8f5',
+    surfaceColor: '#ffffff',
+    textColor: '#1a1a1a',
+    textSecondaryColor: '#4a4a4a',
+    borderColor: '#e8e4dc',
+    borderRadius: '12px',
+    fontFamily: 'Satoshi, Inter, system-ui, sans-serif',
+    logoUrl: store?.theme?.logoUrl || null,
+    faviconUrl: store?.theme?.faviconUrl || null,
   };
 
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://api.fontshare.com" crossOrigin="anonymous" />
-        <link href="https://api.fontshare.com/v2/css?f[]=space-mono@400,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
+        <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <style>{`
-          :root {
-            --primary: ${safeTheme.primaryColor};
-            --secondary: ${safeTheme.secondaryColor};
-            --accent: ${safeTheme.accentColor};
-            --background: ${safeTheme.backgroundColor};
-            --surface: ${safeTheme.surfaceColor};
-            --text: ${safeTheme.textColor};
-            --text-secondary: ${safeTheme.textSecondaryColor};
-            --border: ${safeTheme.borderColor};
-            --radius: ${safeTheme.borderRadius};
-            --font-family: ${safeTheme.fontFamily};
-          }
-
-          body {
-            background-color: var(--background);
-            color: var(--text);
-            font-family: var(--font-family), system-ui, sans-serif;
-          }
-
-          /* Smooth scroll behavior */
-          html {
-            scroll-behavior: smooth;
-          }
-
-          /* Reduced motion preference */
-          @media (prefers-reduced-motion: reduce) {
-            *,
-            *::before,
-            *::after {
-              animation-duration: 0.01ms !important;
-              animation-iteration-count: 1 !important;
-              transition-duration: 0.01ms !important;
-              scroll-behavior: auto !important;
-            }
-          }
-
-          /* Custom selection */
-          ::selection {
-            background: var(--accent);
-            color: var(--bg-primary);
-          }
-
-          /* Focus visible for accessibility */
-          :focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-          }
-
-          /* Smooth scrollbar */
-          ::-webkit-scrollbar {
-            width: 10px;
-          }
-
-          ::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-          }
-
-          ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 0;
-            border: 2px solid var(--bg-secondary);
-          }
-
-          ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-          }
-
-          /* Loading spinner */
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-
-          .animate-spin {
-            animation: spin 1s linear infinite;
-          }
-
-          @keyframes slide-in-right {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
-          }
-
-          .animate-slide-in-right {
-            animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-        `}</style>
+        <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col" style={{
+        backgroundColor: 'var(--cream)',
+        color: 'var(--charcoal)',
+        fontFamily: 'var(--font-body)'
+      }} suppressHydrationWarning>
+        <SkipNav />
+
+        {/* Live region for accessibility announcements */}
+        <div aria-live="polite" aria-atomic="true" className="sr-only" />
+
         <ThemeProvider theme={safeTheme}>
           <Providers storeId={store?.id}>
-            {children}
+            <div id="main-content" className="flex-1">
+              {children}
+            </div>
           </Providers>
         </ThemeProvider>
       </body>

@@ -312,6 +312,63 @@ fastify.post('/api/auth/login', {
 });
 
 // ----------------------------------------------------
+// 2b. CHANGE PASSWORD API (Protected)
+// ----------------------------------------------------
+fastify.put('/api/auth/change-password', {
+  preHandler: async (request, reply) => {
+    try {
+      await request.jwtVerify();
+      const user = request.user as { userId?: string };
+      if (!user?.userId) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+    } catch {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+  }
+}, async (request, reply) => {
+  const { userId } = request.user as { userId: string };
+  let { currentPassword, newPassword } = request.body as any;
+
+  // Validate inputs
+  if (!currentPassword || !newPassword) {
+    return reply.status(400).send({ error: 'Current password and new password are required' });
+  }
+
+  if (newPassword.length < 8) {
+    return reply.status(400).send({ error: 'New password must be at least 8 characters' });
+  }
+
+  try {
+    // Get user from database
+    const foundUsers = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const user = foundUsers[0];
+
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isCurrentValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentValid) {
+      return reply.status(401).send({ error: 'Current password is incorrect' });
+    }
+
+    // Hash and update new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.update(users)
+      .set({ password: hashedPassword, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    return reply.send({ message: 'Password updated successfully' });
+
+  } catch (error: any) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: 'Internal Server Error' });
+  }
+});
+
+// ----------------------------------------------------
 // 3. UPDATE STORE THEME API (Protected)
 // ----------------------------------------------------
 fastify.put('/api/store/theme', {

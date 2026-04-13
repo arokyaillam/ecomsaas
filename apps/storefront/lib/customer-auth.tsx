@@ -5,6 +5,26 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 // Use relative URL for client-side (proxied via Next.js rewrites)
 const API_URL = '';
 
+// Extract store domain from hostname (e.g., "arokyastore.localhost" -> "arokyastore")
+function extractStoreDomain(hostname: string): string {
+  // Remove port if present
+  const hostWithoutPort = hostname.split(':')[0];
+
+  // Extract subdomain part (before the first dot)
+  if (hostWithoutPort.includes('.')) {
+    const parts = hostWithoutPort.split('.');
+    // If first part is "www", skip it
+    if (parts[0] === 'www' && parts.length > 2) {
+      return parts[1];
+    } else if (parts.length >= 2) {
+      // Take the first part as the store domain
+      return parts[0];
+    }
+  }
+
+  return hostWithoutPort;
+}
+
 interface Customer {
   id: string;
   email: string;
@@ -104,7 +124,7 @@ export function CustomerAuthProvider({ children, storeId }: { children: React.Re
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-store-domain': window.location.hostname,
+          'x-store-domain': extractStoreDomain(window.location.hostname),
         },
         body: JSON.stringify({ storeId, email, password }),
       });
@@ -133,7 +153,7 @@ export function CustomerAuthProvider({ children, storeId }: { children: React.Re
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-store-domain': window.location.hostname,
+          'x-store-domain': extractStoreDomain(window.location.hostname),
         },
         body: JSON.stringify({ ...data, storeId }),
       });

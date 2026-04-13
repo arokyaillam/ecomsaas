@@ -594,4 +594,116 @@ export default async function customerRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Failed to fetch customer' });
     }
   });
+
+  // Forgot Password - Request reset token
+  fastify.post('/forgot-password', {
+    config: authRateLimit,
+  }, async (request, reply) => {
+    const { email } = request.body as { email: string };
+
+    // Derive storeId from the storefront domain header
+    const domain = request.headers['x-store-domain'] as string || 'localhost';
+    let storeId: string;
+
+    try {
+      const storeArr = await db.select({ id: stores.id }).from(stores).where(eq(stores.domain, domain)).limit(1);
+      if (storeArr.length === 0) {
+        return reply.status(400).send({ error: 'Store not found' });
+      }
+      storeId = storeArr[0].id;
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to process request' });
+    }
+
+    try {
+      // Find customer
+      const customerArr = await db.select()
+        .from(customers)
+        .where(and(
+          eq(customers.storeId, storeId),
+          eq(customers.email, email.toLowerCase())
+        ))
+        .limit(1);
+
+      // Always return success to prevent email enumeration
+      if (customerArr.length === 0) {
+        return reply.send({ message: 'If an account exists, a reset email has been sent' });
+      }
+
+      const customer = customerArr[0];
+
+      // Generate reset token
+      const resetToken = randomUUID();
+      const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Save token to database
+      await db.update(customers)
+        .set({
+          passwordResetToken: resetToken,
+          passwordResetExpires: resetExpires,
+        })
+        .where(eq(customers.id, customer.id));
+
+      // TODO: Send email with reset link
+      // For now, return token in response (for development)
+      fastify.log.info(`Password reset token for ${email}: ${resetToken}`);
+
+      return reply.send({
+        message: 'If an account exists, a reset email has been sent',
+        // Include token in development mode
+        ...(process.env.NODE_ENV !== 'production' && { resetToken }),
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to process request' });
+    }
+  });
+
+  // Reset Password - Use token to set new password
+  fastify.post('/reset-password', {
+    config: authRateLimit,
+  }, async (request, reply) => {
+    const { token, password } = request.body as { token: string; password: string };
+
+    // Validate password
+    if (!password || password.length < 6) {
+      return reply.status(400).send({ error: 'Password must be at least 6 characters' });
+    }
+
+    try {
+      // Find customer by token
+      const customerArr = await db.select()
+        .from(customers)
+        .where(and(
+          eq(customers.passwordResetToken, token),
+          sql`${customers.passwordResetExpires} > NOW()`
+        ))
+        .limit(1);
+
+      if (customerArr.length === 0) {
+        return reply.status(400).send({ error: 'Invalid or expired reset token' });
+      }
+
+      const customer = customerArr[0];
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Update password and clear reset token
+      await db.update(customers)
+        .set({
+          password: hashedPassword,
+          passwordResetToken: null,
+          passwordResetExpires: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, customer.id));
+
+      return reply.send({ message: 'Password reset successfully' });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to reset password' });
+    }
+  });
 }

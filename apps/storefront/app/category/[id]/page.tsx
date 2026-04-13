@@ -89,7 +89,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: theme.backgroundColor }}>
       {/* Header */}
-      <Header store={store} categories={categories} />
+      <Header />
 
       {/* Page Header - Editorial Style */}
       <section
@@ -362,7 +362,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
                 >
                   <ProductCard
                     product={product}
-                    theme={theme}
+                    
                     currency={store.currency}
                   />
                 </div>

@@ -193,7 +193,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: theme.backgroundColor }}>
-      <Header store={store} categories={categories} />
+      <Header />
 
       {/* Page Header - Editorial Style */}
       <section
@@ -589,7 +589,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                     >
                       <ProductCard
                         product={product}
-                        theme={theme}
+                        
                         currency={store.currency}
                       />
                     </div>

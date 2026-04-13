@@ -1,10 +1,10 @@
 import { headers } from 'next/headers';
 import { getStoreByDomain, getStoreProducts, getStoreCategories } from '@/lib/store';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Header } from '@/components/Header';
-import { Hero } from '@/components/Hero';
 import { ProductCard } from '@/components/ProductCard';
-import { ArrowRight, Mail } from 'lucide-react';
+import { ArrowRight, Truck, Shield, RefreshCw } from 'lucide-react';
 
 export default async function Home() {
   let store = null;
@@ -25,7 +25,6 @@ export default async function Home() {
         getStoreCategories(store.id),
       ]);
 
-      // Handle pagination response format
       products = productsData?.data || productsData || [];
       categories = categoriesData?.data || categoriesData || [];
     }
@@ -36,164 +35,206 @@ export default async function Home() {
 
   if (!store) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] noise">
-        <div className="p-8 text-center max-w-md border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)]">
-          <h1 className="font-mono text-3xl font-bold mb-4 text-[var(--text-primary)]">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
+        <div className="p-8 text-center max-w-md rounded-xl" style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+          <h1 className="text-2xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
             Store Not Found
           </h1>
-          <p className="mb-4 text-[var(--text-secondary)]">
+          <p style={{ color: 'var(--text-secondary)' }}>
             Domain: {domain}
           </p>
-          {error && <p className="mb-4 text-[var(--accent)] text-sm font-mono">Error: {error}</p>}
-          <div className="text-[var(--text-secondary)] text-sm space-y-1">
-            <p>Please make sure:</p>
-            <p>1. Backend running on port 8000</p>
-            <p>2. Database migrated</p>
-            <p>3. Store exists for "{domain}"</p>
-          </div>
+          {error && <p className="mt-4 text-sm" style={{ color: 'var(--accent)' }}>Error: {error}</p>}
         </div>
       </div>
     );
   }
 
   const currency = store.currency || 'USD';
+  const heroImage = store.hero?.image;
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
-      {/* Header */}
-      <Header store={store} categories={categories} />
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <Header />
 
       {/* Hero Section */}
-      <Hero store={store} categories={categories} />
+      <section className="pt-20 lg:pt-0">
+        <div className="grid lg:grid-cols-2 min-h-[70vh] lg:min-h-[90vh]">
+          {/* Content */}
+          <div className="flex flex-col justify-center px-6 py-16 lg:px-16 lg:py-24 order-2 lg:order-1">
+            <div className="max-w-xl mx-auto lg:mx-0">
+              <span className="inline-block px-4 py-1.5 rounded-full text-sm font-medium mb-6" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                New Collection 2025
+              </span>
+              <h1 className="text-hero mb-6" style={{ color: 'var(--text-primary)' }}>
+                {store.hero?.title || 'Discover Your Style'}
+              </h1>
+              <p className="text-body-lg mb-8" style={{ color: 'var(--text-secondary)' }}>
+                {store.hero?.subtitle || 'Curated products for the modern lifestyle. Quality meets simplicity.'}
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <Link
+                  href="/products"
+                  className="btn-primary"
+                >
+                  Shop Now
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/categories"
+                  className="btn-secondary"
+                >
+                  Explore Categories
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Image */}
+          <div className="relative h-80 lg:h-auto order-1 lg:order-2">
+            {heroImage ? (
+              <Image
+                src={heroImage}
+                alt="Hero"
+                fill
+                className="object-cover"
+                priority
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <span className="text-6xl font-display" style={{ color: 'var(--border)' }}>Hero Image</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Badges */}
+      <section className="py-12 border-y" style={{ borderColor: 'var(--border)' }}>
+        <div className="container mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex items-center gap-4 justify-center">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <Truck className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <h3 className="font-medium" style={{ color: 'var(--text-primary)' }}>Free Shipping</h3>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>On orders over $50</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 justify-center">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <Shield className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <h3 className="font-medium" style={{ color: 'var(--text-primary)' }}>Secure Payment</h3>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>100% secure checkout</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 justify-center">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <RefreshCw className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <h3 className="font-medium" style={{ color: 'var(--text-primary)' }}>Easy Returns</h3>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>30-day return policy</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Categories Section */}
       {categories.length > 0 && (
-        <section id="categories" className="py-24 px-4 sm:px-6 lg:px-8 relative">
-          <div className="max-w-[1800px] mx-auto">
-            {/* Section Header */}
+        <section className="section">
+          <div className="container mx-auto px-6">
             <div className="flex items-end justify-between mb-12">
               <div>
-                <div className="flex items-center gap-4 mb-4 opacity-0 animate-fade-up">
-                  <div className="w-12 h-[2px] bg-[var(--accent)]" />
-                  <span className="text-caption text-[var(--accent)]">Browse</span>
-                </div>
-                <h2 className="text-display text-[var(--text-primary)] opacity-0 animate-fade-up delay-100">
-                  CATEGORIES
+                <h2 className="text-display mb-2" style={{ color: 'var(--text-primary)' }}>
+                  Shop by Category
                 </h2>
+                <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
+                  Browse our curated collections
+                </p>
               </div>
               <Link
                 href="/categories"
-                className="hidden sm:flex items-center gap-2 btn-ghost"
+                className="hidden md:flex items-center gap-2 text-sm font-medium hover:opacity-70 transition-opacity"
+                style={{ color: 'var(--accent)' }}
               >
                 View All
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
-            {/* Categories Grid - Brutalist Style */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {categories.slice(0, 4).map((category: any, index: number) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+              {categories.slice(0, 4).map((category: any) => (
                 <Link
                   key={category.id}
                   href={`/category/${category.id}`}
-                  className="group relative aspect-[4/5] border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)] overflow-hidden hover:translate-y-[-8px] hover:shadow-[8px_8px_0_var(--text-primary)] transition-all duration-300 opacity-0 animate-fade-up"
-                  style={{ animationDelay: `${(index + 2) * 100}ms`, animationFillMode: 'forwards' }}
+                  className="group relative aspect-[4/5] rounded-xl overflow-hidden card-hover"
                 >
-                  {/* Background Number */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="font-mono text-[12rem] font-bold text-[var(--text-primary)] opacity-5">
-                      0{index + 1}
+                  <div className="absolute inset-0" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                    {category.image && (
+                      <Image
+                        src={category.image}
+                        alt={category.name}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6">
+                    <h3 className="font-display text-lg md:text-xl text-white mb-1">
+                      {category.name}
+                    </h3>
+                    <span className="inline-flex items-center gap-1 text-sm text-white/80 group-hover:text-white transition-colors">
+                      Shop Now
+                      <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
                     </span>
                   </div>
-
-                  {/* Content */}
-                  <div className="absolute inset-0 p-6 flex flex-col justify-between">
-                    <div className="w-12 h-12 bg-[var(--accent)] flex items-center justify-center">
-                      <span className="font-mono text-xl font-bold text-[var(--bg-primary)]">
-                        0{index + 1}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="font-mono text-2xl font-bold text-[var(--text-primary)] mb-1">
-                        {category.nameEn}
-                      </h3>
-                      {category.nameAr && (
-                        <p className="text-sm text-[var(--text-secondary)]" dir="rtl">
-                          {category.nameAr}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-4 text-[var(--accent)] font-mono text-sm uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <span>Explore</span>
-                        <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Hover Border Effect */}
-                  <div className="absolute inset-0 border-4 border-[var(--accent)] opacity-0 group-hover:opacity-100 transition-opacity" />
                 </Link>
               ))}
-            </div>
-
-            {/* Mobile View All */}
-            <div className="mt-8 text-center sm:hidden">
-              <Link href="/categories" className="btn-outline">
-                View All Categories
-              </Link>
             </div>
           </div>
         </section>
       )}
 
-      {/* Featured Products Section */}
+      {/* Featured Products */}
       {products.length > 0 && (
-        <section id="products" className="py-24 px-4 sm:px-6 lg:px-8 relative">
-          <div className="max-w-[1800px] mx-auto">
-            {/* Section Header */}
+        <section className="section" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+          <div className="container mx-auto px-6">
             <div className="flex items-end justify-between mb-12">
               <div>
-                <div className="flex items-center gap-4 mb-4 opacity-0 animate-fade-up">
-                  <div className="w-12 h-[2px] bg-[var(--accent)]" />
-                  <span className="text-caption text-[var(--accent)]">Curated For You</span>
-                </div>
-                <h2 className="text-display text-[var(--text-primary)] opacity-0 animate-fade-up delay-100">
-                  FEATURED
+                <h2 className="text-display mb-2" style={{ color: 'var(--text-primary)' }}>
+                  Featured Products
                 </h2>
+                <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
+                  Handpicked for you
+                </p>
               </div>
               <Link
                 href="/products"
-                className="hidden sm:flex items-center gap-2 btn-ghost"
+                className="hidden md:flex items-center gap-2 text-sm font-medium hover:opacity-70 transition-opacity"
+                style={{ color: 'var(--accent)' }}
               >
-                View All Products
+                View All
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
-            {/* Products Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {products.slice(0, 8).map((product: any, index: number) => (
-                <div
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+              {products.slice(0, 8).map((product: any) => (
+                <ProductCard
                   key={product.id}
-                  className="opacity-0 animate-fade-up"
-                  style={{
-                    animationDelay: `${(index + 3) * 100}ms`,
-                    animationFillMode: 'forwards',
-                  }}
-                >
-                  <ProductCard
-                    product={product}
-                    store={store}
-                    currency={currency}
-                  />
-                </div>
+                  product={product}
+                  currency={currency}
+                />
               ))}
             </div>
 
-            {/* Mobile View All */}
-            <div className="mt-12 text-center sm:hidden">
-              <Link href="/products" className="btn-outline">
+            <div className="mt-12 text-center md:hidden">
+              <Link href="/products" className="btn-secondary">
                 View All Products
               </Link>
             </div>
@@ -201,165 +242,71 @@ export default async function Home() {
         </section>
       )}
 
-      {/* Newsletter Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[var(--accent)] opacity-5 blur-[150px] rounded-full" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[var(--text-primary)] opacity-3 blur-[100px] rounded-full" />
-
-        <div className="max-w-[1800px] mx-auto">
-          <div className="relative border-4 border-[var(--text-primary)] bg-[var(--bg-secondary)] p-12 md:p-16">
-            <div className="max-w-2xl mx-auto text-center">
-              <div className="flex items-center justify-center gap-4 mb-6">
-                <div className="w-12 h-[2px] bg-[var(--accent)]" />
-                <span className="text-caption text-[var(--accent)]">Newsletter</span>
-                <div className="w-12 h-[2px] bg-[var(--accent)]" />
-              </div>
-
-              <h2 className="font-mono text-4xl sm:text-5xl font-bold text-[var(--text-primary)] mb-4">
-                JOIN THE CLUB
-              </h2>
-              <p className="text-body-lg text-[var(--text-secondary)] mb-8">
-                Subscribe for exclusive drops, early access &amp; curated inspiration.
-              </p>
-
-              <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                <input
-                  type="email"
-                  placeholder="YOUR EMAIL"
-                  className="flex-1 px-6 py-4 bg-[var(--bg-primary)] border-2 border-[var(--border)] text-[var(--text-primary)] font-mono uppercase placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
-                />
-                <button
-                  type="submit"
-                  className="btn-brutalist whitespace-nowrap"
-                >
-                  Subscribe
-                </button>
-              </form>
-            </div>
-
-            {/* Decorative Corner */}
-            <div className="absolute top-4 right-4 w-4 h-4 bg-[var(--accent)]" />
-            <div className="absolute bottom-4 left-4 w-4 h-4 bg-[var(--accent)]" />
+      {/* Newsletter */}
+      <section className="section">
+        <div className="container mx-auto px-6">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-headline mb-4" style={{ color: 'var(--text-primary)' }}>
+              Stay in the Loop
+            </h2>
+            <p className="text-body mb-8" style={{ color: 'var(--text-secondary)' }}>
+              Subscribe to our newsletter for exclusive offers, new arrivals, and style tips.
+            </p>
+            <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="flex-1 px-4 py-3 rounded-lg border"
+                style={{ borderColor: 'var(--border)' }}
+              />
+              <button type="submit" className="btn-primary whitespace-nowrap">
+                Subscribe
+              </button>
+            </form>
           </div>
         </div>
       </section>
 
-      {/* Footer - Neo-Brutalist */}
-      <footer className="py-16 px-4 sm:px-6 lg:px-8 border-t-4 border-[var(--text-primary)]">
-        <div className="max-w-[1800px] mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-            {/* Brand Column */}
-            <div className="lg:col-span-2">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-[var(--accent)] flex items-center justify-center"
-                >
-                  <span className="font-mono text-2xl font-bold text-[var(--bg-primary)]">
-                    {store.name.charAt(0)}
-                  </span>
-                </div>
-                <span className="font-mono text-2xl font-bold text-[var(--text-primary)]">
-                  {store.name}
-                </span>
-              </div>
-              <p className="text-body text-[var(--text-secondary)] max-w-md mb-6">
-                Curating exceptional products for those who appreciate raw design,
-                honest craftsmanship, and brutalist aesthetics.
+      {/* Footer */}
+      <footer className="py-12 border-t" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
+        <div className="container mx-auto px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+            <div className="col-span-2 md:col-span-1">
+              <Link href="/" className="font-display text-xl font-semibold mb-4 block" style={{ color: 'var(--text-primary)' }}>
+                {store.name}
+              </Link>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Curated products for the modern lifestyle.
               </p>
-
-              {/* Social Links */}
-              <div className="flex items-center gap-4">
-                {/* Instagram */}
-                <a
-                  href="#"
-                  className="w-12 h-12 border-2 border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-all"
-                  aria-label="Instagram"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <rect x="2" y="2" width="20" height="20" rx="5" strokeWidth="2"/>
-                    <circle cx="12" cy="12" r="4" strokeWidth="2"/>
-                    <circle cx="18" cy="6" r="1" fill="currentColor"/>
-                  </svg>
-                </a>
-                {/* Twitter/X */}
-                <a
-                  href="#"
-                  className="w-12 h-12 border-2 border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-all"
-                  aria-label="Twitter"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                  </svg>
-                </a>
-                {/* Email */}
-                <a
-                  href="#"
-                  className="w-12 h-12 border-2 border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-all"
-                  aria-label="Email"
-                >
-                  <Mail className="w-5 h-5" />
-                </a>
-              </div>
             </div>
-
-            {/* Quick Links */}
             <div>
-              <h4 className="font-mono text-lg font-bold text-[var(--text-primary)] mb-6 uppercase">
-                Quick Links
-              </h4>
-              <ul className="space-y-3">
-                {[{ label: 'Shop All', href: '/search' }, { label: 'Categories', href: '/search' }, { label: 'New Arrivals', href: '/search?sort=newest' }, { label: 'Sale', href: '/search?sale=true' }].map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors font-mono text-sm uppercase tracking-wider"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
+              <h4 className="font-medium mb-4 text-sm" style={{ color: 'var(--text-primary)' }}>Shop</h4>
+              <ul className="space-y-2">
+                <li><Link href="/products" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>All Products</Link></li>
+                <li><Link href="/categories" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>Categories</Link></li>
+                <li><Link href="/search" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>Search</Link></li>
               </ul>
             </div>
-
-            {/* Support */}
             <div>
-              <h4 className="font-mono text-lg font-bold text-[var(--text-primary)] mb-6 uppercase">
-                Support
-              </h4>
-              <ul className="space-y-3">
-                {[{ label: 'Contact Us', href: 'mailto:contact@store.com' }, { label: 'FAQ', href: '/search' }, { label: 'Shipping', href: '/search' }, { label: 'Returns', href: '/search' }].map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors font-mono text-sm uppercase tracking-wider"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
+              <h4 className="font-medium mb-4 text-sm" style={{ color: 'var(--text-primary)' }}>Account</h4>
+              <ul className="space-y-2">
+                <li><Link href="/account" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>My Account</Link></li>
+                <li><Link href="/account/orders" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>Orders</Link></li>
+                <li><Link href="/cart" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>Cart</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium mb-4 text-sm" style={{ color: 'var(--text-primary)' }}>Support</h4>
+              <ul className="space-y-2">
+                <li><Link href="/contact" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>Contact Us</Link></li>
+                <li><Link href="/faq" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--text-muted)' }}>FAQ</Link></li>
               </ul>
             </div>
           </div>
-
-          {/* Bottom Bar */}
-          <div className="pt-8 border-t-2 border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-caption text-[var(--text-muted)]">
-              © 2026 {store.name}. All rights reserved.
+          <div className="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              &copy; {new Date().getFullYear()} {store.name}. All rights reserved.
             </p>
-            <div className="flex items-center gap-6">
-              <Link
-                href="/search"
-                className="text-caption text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                Privacy Policy
-              </Link>
-              <Link
-                href="/search"
-                className="text-caption text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                Terms of Service
-              </Link>
-            </div>
           </div>
         </div>
       </footer>

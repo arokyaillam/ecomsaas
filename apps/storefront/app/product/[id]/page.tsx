@@ -108,8 +108,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         reviewCount={reviews.length || undefined}
       />
       <div style={{ minHeight: '100vh', backgroundColor: store.theme.backgroundColor }}>
-        <Header store={store} categories={[]} />
-        <ProductDetail product={product} store={store} reviews={reviews} modifiers={modifiers} />
+        <Header />
+        <ProductDetail product={product} reviews={reviews} modifiers={modifiers} store={store} />
       </div>
     </>
   );

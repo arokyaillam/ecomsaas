@@ -7,9 +7,19 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingBag, Truck, CreditCard, ChevronLeft, Lock, MapPin } from 'lucide-react';
+import {
+  ShoppingBag,
+  Truck,
+  CreditCard,
+  ChevronLeft,
+  Lock,
+  MapPin,
+  Check,
+  Package,
+  Shield,
+  ArrowRight
+} from 'lucide-react';
 
-// Use relative URL for client-side (proxied via Next.js rewrites)
 const API_URL = '';
 
 interface ShippingForm {
@@ -145,7 +155,7 @@ export default function CheckoutPage() {
       setOrderId(data.data.orderId);
       setOrderNumber(data.data.orderNumber);
       setOrderComplete(true);
-      fetchCart(); // Clear cart
+      fetchCart();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -155,16 +165,26 @@ export default function CheckoutPage() {
 
   if (!cart || cart.items.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <ShoppingBag className="w-16 h-16 mb-4 opacity-30" />
-        <h1 className="text-2xl font-bold mb-2">Your cart is empty</h1>
-        <p className="opacity-60 mb-6">Add some items to proceed to checkout</p>
+      <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: 'var(--cream)' }}>
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+          style={{ backgroundColor: 'var(--bg-tertiary)' }}
+        >
+          <ShoppingBag className="w-8 h-8" style={{ color: 'var(--text-muted)' }} />
+        </div>
+        <h1 className="font-display text-2xl mb-2" style={{ color: 'var(--charcoal)' }}>
+          Your cart is empty
+        </h1>
+        <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>
+          Add some items to proceed to checkout
+        </p>
         <Link
           href="/products"
-          className="px-6 py-3 rounded-xl font-medium transition-all hover:opacity-90"
-          style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all hover:opacity-90"
+          style={{ backgroundColor: 'var(--coral)', color: 'white' }}
         >
           Browse Products
+          <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
     );
@@ -172,81 +192,162 @@ export default function CheckoutPage() {
 
   if (orderComplete) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6" style={{ backgroundColor: 'var(--primary)' }}>
-          <Lock className="w-10 h-10 text-white" />
-        </div>
-        <h1 className="text-3xl font-bold mb-2">Order Placed!</h1>
-        <p className="opacity-60 mb-2">Thank you for your purchase</p>
-        {orderId && (
-          <p className="text-sm opacity-40 mb-6">Order #{orderId.slice(0, 8)}</p>
-        )}
-        <Link
-          href="/"
-          className="px-6 py-3 rounded-xl font-medium transition-all hover:opacity-90"
-          style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+      <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: 'var(--cream)' }}>
+        <div
+          className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
+          style={{ backgroundColor: '#10b981' }}
         >
-          Continue Shopping
-        </Link>
+          <Check className="w-12 h-12 text-white" />
+        </div>
+        <h1 className="font-display text-3xl mb-2" style={{ color: 'var(--charcoal)' }}>
+          Order Confirmed!
+        </h1>
+        <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>
+          Thank you for your purchase
+        </p>
+        {orderNumber && (
+          <p className="text-sm mb-8 font-mono" style={{ color: 'var(--text-muted)' }}>
+            Order #{orderNumber}
+          </p>
+        )}
+        <div className="flex gap-3">
+          <Link
+            href="/"
+            className="px-6 py-3 rounded-xl font-medium transition-all hover:opacity-90"
+            style={{ backgroundColor: 'var(--coral)', color: 'white' }}
+          >
+            Continue Shopping
+          </Link>
+          {isAuthenticated && (
+            <Link
+              href="/account/orders"
+              className="px-6 py-3 rounded-xl font-medium transition-all border"
+              style={{ borderColor: 'var(--border)', color: 'var(--charcoal)' }}
+            >
+              View Orders
+            </Link>
+          )}
+        </div>
       </div>
     );
   }
 
-  const currencySymbol = store?.currency === 'USD' ? '$' : store?.currency === 'EUR' ? '€' : store?.currency === 'GBP' ? '£' : store?.currency || '$';
+  const currency = store?.currency || 'USD';
+  const shippingCost = shippingMethod === 'express' ? 12.99 : 5.99;
+  const totalWithShipping = Number(cart.total) + shippingCost;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--cream)' }}>
       {/* Header */}
-      <header className="border-b border-[var(--border)]">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>
+      <header className="border-b sticky top-0 z-40" style={{
+        borderColor: 'var(--border)',
+        backgroundColor: 'rgba(250, 248, 245, 0.95)',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="font-display text-xl" style={{ color: 'var(--charcoal)' }}>
             {store?.name || 'Store'}
           </Link>
-          <div className="flex items-center gap-4 text-sm">
-            <span className={step === 'shipping' ? 'font-medium' : 'opacity-60'}>Shipping</span>
-            <span className="opacity-30">→</span>
-            <span className={step === 'payment' ? 'font-medium' : 'opacity-60'}>Payment</span>
-            <span className="opacity-30">→</span>
-            <span className={step === 'review' ? 'font-medium' : 'opacity-60'}>Review</span>
+          <div className="flex items-center gap-2">
+            {['shipping', 'payment', 'review'].map((s, idx) => (
+              <div key={s} className="flex items-center">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                    step === s ? 'text-white' :
+                    ['shipping', 'payment'].indexOf(step) > ['shipping', 'payment'].indexOf(s)
+                      ? 'text-white' : ''
+                  }`}
+                  style={{
+                    backgroundColor: step === s ? 'var(--coral)' :
+                      ['shipping', 'payment'].indexOf(step) > ['shipping', 'payment'].indexOf(s)
+                        ? 'var(--charcoal)' : 'var(--bg-tertiary)',
+                    color: ['shipping', 'payment'].indexOf(step) >= ['shipping', 'payment'].indexOf(s) ? 'white' : 'var(--text-muted)'
+                  }}
+                >
+                  {['shipping', 'payment'].indexOf(step) > ['shipping', 'payment'].indexOf(s) ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    idx + 1
+                  )}
+                </div>
+                <span
+                  className="hidden sm:block ml-2 text-sm font-medium"
+                  style={{
+                    color: step === s ? 'var(--charcoal)' : 'var(--text-muted)'
+                  }}
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </span>
+                {idx < 2 && (
+                  <div
+                    className="w-8 h-px mx-2 hidden sm:block"
+                    style={{ backgroundColor: 'var(--border)' }}
+                  />
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-2 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div className="grid lg:grid-cols-5 gap-8">
           {/* Left Column - Forms */}
-          <div>
+          <div className="lg:col-span-3">
             {step === 'shipping' && (
               <div className="space-y-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <Truck className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-                  <h2 className="text-xl font-semibold">Shipping Information</h2>
+                <div className="flex items-center gap-3 mb-8">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  >
+                    <Truck className="w-5 h-5" style={{ color: 'var(--coral)' }} />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-xl" style={{ color: 'var(--charcoal)' }}>
+                      Shipping Information
+                    </h2>
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Enter your delivery details
+                    </p>
+                  </div>
                 </div>
 
                 {/* Saved Addresses */}
                 {isAuthenticated && addresses.length > 0 && (
                   <div className="mb-6">
-                    <label className="block text-sm font-medium mb-2">Use Saved Address</label>
-                    <div className="space-y-2">
+                    <label className="block text-sm font-medium mb-3" style={{ color: 'var(--charcoal)' }}>
+                      Use Saved Address
+                    </label>
+                    <div className="grid gap-3">
                       {addresses.map((addr) => (
                         <button
                           key={addr.id}
                           onClick={() => setSelectedAddress(addr.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition-all ${
+                          className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                             selectedAddress === addr.id
-                              ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                              : 'border-[var(--border)] hover:border-[var(--primary)]/50'
+                              ? 'border-[var(--coral)]'
+                              : 'border-transparent hover:border-[var(--border)]'
                           }`}
+                          style={{ backgroundColor: 'var(--bg-secondary)' }}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">{addr.name}</span>
+                            <span className="font-medium" style={{ color: 'var(--charcoal)' }}>
+                              {addr.name}
+                            </span>
                             {addr.isDefault && (
-                              <span className="text-xs px-2 py-0.5 rounded bg-[var(--primary)]/20" style={{ color: 'var(--primary)' }}>
+                              <span
+                                className="text-xs px-2 py-0.5 rounded-full"
+                                style={{
+                                  backgroundColor: 'var(--coral-10)',
+                                  color: 'var(--coral)'
+                                }}
+                              >
                                 Default
                               </span>
                             )}
                           </div>
-                          <p className="text-sm opacity-60 mt-1">
+                          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
                             {addr.addressLine1}, {addr.city}, {addr.country}
                           </p>
                         </button>
@@ -255,102 +356,170 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleShippingSubmit} className="space-y-4">
+                <form onSubmit={handleShippingSubmit} className="space-y-5">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">First Name</label>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                        First Name
+                      </label>
                       <input
                         required
                         value={shippingForm.firstName}
                         onChange={(e) => setShippingForm({ ...shippingForm, firstName: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--charcoal)'
+                        }}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Last Name</label>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                        Last Name
+                      </label>
                       <input
                         required
                         value={shippingForm.lastName}
                         onChange={(e) => setShippingForm({ ...shippingForm, lastName: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--charcoal)'
+                        }}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Email</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                      Email
+                    </label>
                     <input
                       type="email"
                       required
                       value={shippingForm.email}
                       onChange={(e) => setShippingForm({ ...shippingForm, email: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                      className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--charcoal)'
+                      }}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Phone</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                      Phone
+                    </label>
                     <input
                       type="tel"
                       value={shippingForm.phone}
                       onChange={(e) => setShippingForm({ ...shippingForm, phone: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                      className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--charcoal)'
+                      }}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Address</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                      Address
+                    </label>
                     <input
                       required
                       value={shippingForm.addressLine1}
                       onChange={(e) => setShippingForm({ ...shippingForm, addressLine1: e.target.value })}
                       placeholder="Street address"
-                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                      className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--charcoal)'
+                      }}
                     />
                     <input
                       value={shippingForm.addressLine2}
                       onChange={(e) => setShippingForm({ ...shippingForm, addressLine2: e.target.value })}
                       placeholder="Apartment, suite, etc. (optional)"
-                      className="w-full mt-2 px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                      className="w-full mt-3 px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--charcoal)'
+                      }}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">City</label>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                        City
+                      </label>
                       <input
                         required
                         value={shippingForm.city}
                         onChange={(e) => setShippingForm({ ...shippingForm, city: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--charcoal)'
+                        }}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Postal Code</label>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                        Postal Code
+                      </label>
                       <input
                         required
                         value={shippingForm.postalCode}
                         onChange={(e) => setShippingForm({ ...shippingForm, postalCode: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--charcoal)'
+                        }}
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">State/Province</label>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                        State/Province
+                      </label>
                       <input
                         value={shippingForm.state}
                         onChange={(e) => setShippingForm({ ...shippingForm, state: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--charcoal)'
+                        }}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Country</label>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--charcoal)' }}>
+                        Country
+                      </label>
                       <select
                         value={shippingForm.country}
                         onChange={(e) => setShippingForm({ ...shippingForm, country: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--border)] bg-white/5 focus:outline-none focus:border-[var(--primary)]"
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors appearance-none cursor-pointer"
+                        style={{
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--charcoal)'
+                        }}
                       >
                         <option value="US">United States</option>
                         <option value="CA">Canada</option>
@@ -366,53 +535,64 @@ export default function CheckoutPage() {
 
                   {/* Shipping Method */}
                   <div className="pt-4">
-                    <label className="block text-sm font-medium mb-3">Shipping Method</label>
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setShippingMethod('standard')}
-                        className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all ${
-                          shippingMethod === 'standard'
-                            ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                            : 'border-[var(--border)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Truck className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-                          <div className="text-left">
-                            <p className="font-medium">Standard Shipping</p>
-                            <p className="text-sm opacity-60">5-7 business days</p>
+                    <label className="block text-sm font-medium mb-4" style={{ color: 'var(--charcoal)' }}>
+                      Shipping Method
+                    </label>
+                    <div className="space-y-3">
+                      {[
+                        { id: 'standard', label: 'Standard Shipping', time: '5-7 business days', price: 5.99 },
+                        { id: 'express', label: 'Express Shipping', time: '2-3 business days', price: 12.99 },
+                      ].map((method) => (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() => setShippingMethod(method.id)}
+                          className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                            shippingMethod === method.id
+                              ? 'border-[var(--coral)]'
+                              : 'border-transparent hover:border-[var(--border)]'
+                          }`}
+                          style={{ backgroundColor: 'var(--bg-secondary)' }}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                shippingMethod === method.id
+                                  ? 'border-[var(--coral)]'
+                                  : 'border-[var(--border)]'
+                              }`}
+                            >
+                              {shippingMethod === method.id && (
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full"
+                                  style={{ backgroundColor: 'var(--coral)' }}
+                                />
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <p className="font-medium" style={{ color: 'var(--charcoal)' }}>
+                                {method.label}
+                              </p>
+                              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                                {method.time}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <span className="font-medium">{currencySymbol}5.99</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShippingMethod('express')}
-                        className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all ${
-                          shippingMethod === 'express'
-                            ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                            : 'border-[var(--border)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Truck className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-                          <div className="text-left">
-                            <p className="font-medium">Express Shipping</p>
-                            <p className="text-sm opacity-60">2-3 business days</p>
-                          </div>
-                        </div>
-                        <span className="font-medium">{currencySymbol}12.99</span>
-                      </button>
+                          <span className="font-medium" style={{ color: 'var(--charcoal)' }}>
+                            {currency}{method.price}
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-3.5 rounded-xl font-semibold transition-all hover:opacity-90 mt-6"
-                    style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+                    className="w-full py-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-all hover:opacity-90 mt-8"
+                    style={{ backgroundColor: 'var(--coral)', color: 'white' }}
                   >
                     Continue to Payment
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </form>
               </div>
@@ -420,48 +600,89 @@ export default function CheckoutPage() {
 
             {step === 'payment' && (
               <div className="space-y-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <CreditCard className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-                  <h2 className="text-xl font-semibold">Payment Method</h2>
+                <div className="flex items-center gap-3 mb-8">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  >
+                    <CreditCard className="w-5 h-5" style={{ color: 'var(--coral)' }} />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-xl" style={{ color: 'var(--charcoal)' }}>
+                      Payment Method
+                    </h2>
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Select your preferred payment option
+                    </p>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
-                  <button
-                    onClick={() => setPaymentMethod('card')}
-                    className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all ${
-                      paymentMethod === 'card'
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                        : 'border-[var(--border)]'
-                    }`}
-                  >
-                    <CreditCard className="w-5 h-5" />
-                    <span className="font-medium">Credit/Debit Card</span>
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('cod')}
-                    className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all ${
-                      paymentMethod === 'cod'
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                        : 'border-[var(--border)]'
-                    }`}
-                  >
-                    <MapPin className="w-5 h-5" />
-                    <span className="font-medium">Cash on Delivery</span>
-                  </button>
+                  {[
+                    { id: 'card', label: 'Credit/Debit Card', icon: CreditCard },
+                    { id: 'cod', label: 'Cash on Delivery', icon: Package },
+                  ].map((method) => (
+                    <button
+                      key={method.id}
+                      onClick={() => setPaymentMethod(method.id)}
+                      className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${
+                        paymentMethod === method.id
+                          ? 'border-[var(--coral)]'
+                          : 'border-transparent hover:border-[var(--border)]'
+                      }`}
+                      style={{ backgroundColor: 'var(--bg-secondary)' }}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          paymentMethod === method.id
+                            ? 'border-[var(--coral)]'
+                            : 'border-[var(--border)]'
+                        }`}
+                      >
+                        {paymentMethod === method.id && (
+                          <div
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: 'var(--coral)' }}
+                          />
+                        )}
+                      </div>
+                      <method.icon className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+                      <span className="font-medium" style={{ color: 'var(--charcoal)' }}>
+                        {method.label}
+                      </span>
+                    </button>
+                  ))}
                 </div>
 
                 {paymentMethod === 'card' && (
-                  <div className="p-4 rounded-lg border border-[var(--border)] bg-white/5 space-y-4">
-                    <p className="text-sm opacity-60">This is a demo. No actual payment will be processed.</p>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Lock className="w-4 h-4" />
-                      <span>Secure SSL Encryption</span>
+                  <div
+                    className="p-6 rounded-xl space-y-4"
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-4">
+                      <Lock className="w-4 h-4" style={{ color: '#10b981' }} />
+                      <span className="text-sm font-medium" style={{ color: '#10b981' }}>
+                        Secure SSL Encryption
+                      </span>
                     </div>
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      This is a demo store. No actual payment will be processed.
+                      Click "Place Order" to complete your purchase.
+                    </p>
                   </div>
                 )}
 
                 {error && (
-                  <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                  <div
+                    className="p-4 rounded-xl text-sm"
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      color: '#ef4444'
+                    }}
+                  >
                     {error}
                   </div>
                 )}
@@ -469,17 +690,31 @@ export default function CheckoutPage() {
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={() => setStep('shipping')}
-                    className="px-6 py-3 rounded-xl font-medium border border-[var(--border)] hover:bg-white/5 transition-colors"
+                    className="px-6 py-3.5 rounded-xl font-medium border-2 transition-all hover:bg-[var(--bg-secondary)]"
+                    style={{
+                      borderColor: 'var(--border)',
+                      color: 'var(--charcoal)'
+                    }}
                   >
                     Back
                   </button>
                   <button
                     onClick={handlePlaceOrder}
                     disabled={loading}
-                    className="flex-1 py-3.5 rounded-xl font-semibold transition-all hover:opacity-90 disabled:opacity-50"
-                    style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+                    className="flex-1 py-3.5 rounded-xl font-medium transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ backgroundColor: 'var(--coral)', color: 'white' }}
                   >
-                    {loading ? 'Processing...' : 'Place Order'}
+                    {loading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Place Order
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -487,15 +722,26 @@ export default function CheckoutPage() {
           </div>
 
           {/* Right Column - Order Summary */}
-          <div className="lg:sticky lg:top-4 h-fit">
-            <div className="rounded-2xl border border-[var(--border)] p-6 space-y-6">
-              <h3 className="text-lg font-semibold">Order Summary</h3>
+          <div className="lg:col-span-2">
+            <div
+              className="rounded-2xl p-6 sticky top-24"
+              style={{
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border)'
+              }}
+            >
+              <h3 className="font-display text-lg mb-6" style={{ color: 'var(--charcoal)' }}>
+                Order Summary
+              </h3>
 
               {/* Cart Items */}
-              <div className="space-y-4 max-h-80 overflow-y-auto">
+              <div className="space-y-4 max-h-64 overflow-y-auto mb-6">
                 {cart.items.map((item) => (
                   <div key={item.id} className="flex gap-3">
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+                    <div
+                      className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0"
+                      style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                    >
                       {item.product.images ? (
                         <Image
                           src={item.product.images.split(',')[0]}
@@ -511,43 +757,61 @@ export default function CheckoutPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.product.titleEn}</p>
-                      <p className="text-xs opacity-60">Qty: {item.quantity}</p>
+                      <p
+                        className="text-sm font-medium truncate"
+                        style={{ color: 'var(--charcoal)' }}
+                      >
+                        {item.product.titleEn}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Qty: {item.quantity}
+                      </p>
                     </div>
-                    <p className="text-sm font-medium">
-                      {currencySymbol}{item.total}
+                    <p className="text-sm font-medium" style={{ color: 'var(--charcoal)' }}>
+                      {currency}{Number(item.total).toFixed(2)}
                     </p>
                   </div>
                 ))}
               </div>
 
               {/* Totals */}
-              <div className="border-t border-[var(--border)] pt-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="opacity-60">Subtotal</span>
-                  <span>{currencySymbol}{cart.subtotal}</span>
+              <div className="space-y-3 py-6 border-t border-b" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex justify-between text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  <span>Subtotal</span>
+                  <span>{currency}{Number(cart.subtotal).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="opacity-60">Shipping</span>
-                  <span>{currencySymbol}{shippingMethod === 'express' ? '12.99' : '5.99'}</span>
+                <div className="flex justify-between text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  <span>Shipping</span>
+                  <span>{currency}{shippingCost.toFixed(2)}</span>
                 </div>
                 {Number(cart.couponDiscount) > 0 && (
-                  <div className="flex justify-between text-green-400">
+                  <div className="flex justify-between text-sm" style={{ color: 'var(--coral)' }}>
                     <span>Discount</span>
-                    <span>-{currencySymbol}{cart.couponDiscount}</span>
+                    <span>-{currency}{Number(cart.couponDiscount).toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-lg font-semibold pt-2 border-t border-[var(--border)]">
-                  <span>Total</span>
-                  <span style={{ color: 'var(--primary)' }}>
-                    {currencySymbol}{cart.total}
+                <div className="flex justify-between text-lg font-semibold pt-3">
+                  <span style={{ color: 'var(--charcoal)' }}>Total</span>
+                  <span style={{ color: 'var(--coral)' }}>
+                    {currency}{totalWithShipping.toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs opacity-60">
-                <Lock className="w-3 h-3" />
-                <span>Secure checkout with SSL encryption</span>
+              {/* Trust Badges */}
+              <div className="flex items-center justify-center gap-4 pt-4">
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Secure</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Encrypted</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Insured</span>
+                </div>
               </div>
             </div>
           </div>

@@ -48,7 +48,7 @@ export default async function CategoriesPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: theme.backgroundColor }}>
       {/* Header */}
-      <Header store={store} categories={categories} />
+      <Header />
 
       {/* Page Header - Editorial Style */}
       <section

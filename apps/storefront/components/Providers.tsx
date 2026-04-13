@@ -2,6 +2,7 @@
 
 import { CartProvider } from '@/lib/cart';
 import { CustomerAuthProvider } from '@/lib/customer-auth';
+import { ToastProvider } from '@/lib/toast';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -10,10 +11,12 @@ interface ProvidersProps {
 
 export function Providers({ children, storeId }: ProvidersProps) {
   return (
-    <CustomerAuthProvider storeId={storeId || ''}>
-      <CartProvider storeId={storeId || ''}>
-        {children}
-      </CartProvider>
-    </CustomerAuthProvider>
+    <ToastProvider>
+      <CustomerAuthProvider storeId={storeId || ''}>
+        <CartProvider storeId={storeId || ''}>
+          {children}
+        </CartProvider>
+      </CustomerAuthProvider>
+    </ToastProvider>
   );
 }

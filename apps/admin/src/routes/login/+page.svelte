@@ -26,6 +26,8 @@
 
             localStorage.setItem('merchant_token', data.token);
             localStorage.setItem('merchant_store_id', data.storeId);
+            // Also set cookie for server-side auth check
+            document.cookie = `merchant_token=${data.token}; path=/; max-age=${7*24*60*60}`;
             window.location.href = '/dashboard';
 
         } catch (err) {
